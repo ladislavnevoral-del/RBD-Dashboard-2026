@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="RBD Dashboard 2026 — Obchodní přehled divize">
-<meta name="robots" content="index,follow">
+<meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RBD Dashboard 2026</title>
 <style>
@@ -512,26 +512,34 @@ function renderSodList() {
     const kpF = calcKpFactor(r.sleva_pct||0);
     const kpCol = kpF >= 1 ? 'var(--grn)' : kpF > 0 ? 'var(--amb)' : 'var(--red)';
     return `<tr>
-      <td class="L"><div style="display:flex;align-items:center;gap:6px">${getPhoto(r.person,20)}<span style="color:${tc};font-weight:600;font-size:11px">${r.person}</span></div></td>
-      <td class="L" style="font-size:11px;white-space:nowrap">${r.datum}</td>
-      <td class="L" style="font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.akce||''}">${r.akce||''}</td>
-      <td class="L" style="font-size:10px;color:var(--tx3)">${r.cislo||''}</td>
-      <td style="font-weight:700">${fmkc(r.objem_sod)}</td>
-      <td style="color:${(r.sleva_pct||0)>5?'var(--red)':'var(--tx2)'};font-size:11px">${r.sleva_pct>0?r.sleva_pct.toFixed(2)+' %':'—'}</td>
-      <td style="color:var(--red);font-size:11px">${r.sleva_kc>0?fmkc(r.sleva_kc):'—'}</td>
+      <td class="L"><div style="display:flex;align-items:center;gap:5px">${getPhoto(r.person,18)}<span style="color:${tc};font-weight:600;font-size:10px">${r.person}</span></div></td>
+      <td><input type="date" value="${r.datum||''}"
+        style="font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 4px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'datum',this.value);renderSodList()"></td>
+      <td><input type="text" value="${r.akce||''}" placeholder="lokalita…"
+        style="width:150px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'akce',this.value)"></td>
+      <td><input type="text" value="${r.cislo||''}" placeholder="Z12345"
+        style="width:80px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'cislo',this.value)"></td>
+      <td><input type="number" value="${r.objem_sod||0}" step="1000"
+        style="width:90px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;text-align:right;background:#fff;font-weight:700"
+        onchange="sodUpdateObjem('${r.person.replace(/'/g,"\'")}',${ri},this.value)"></td>
+      <td><input type="number" value="${(r.sleva_pct||0).toFixed(2)}" step="0.1" min="0" max="100"
+        style="width:60px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;text-align:right;background:#fff;color:${(r.sleva_pct||0)>5?'var(--red)':'inherit'}"
+        onchange="sodUpdateSleva('${r.person.replace(/'/g,"\'")}',${ri},this.value)"></td>
+      <td style="font-size:10px;color:var(--red)">${r.sleva_kc>0?fmkc(r.sleva_kc):'—'}</td>
       <td style="font-weight:700;color:${kpCol}">${fmkc(r.objem_kp)}</td>
-      <td style="font-size:10px;color:${kpCol};font-weight:600">${kpF<1?Math.round(kpF*100)+'% KP':''}</td>
-      <td class="L" style="font-size:10px">
-        <input type="text" value="${r.admin||''}" placeholder="administrátor"
-          style="width:110px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px"
-          onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'admin',this.value)">
-      </td>
-      <td class="L" style="font-size:10px">
-        <input type="text" value="${r.manazer||''}" placeholder="manažer"
-          style="width:110px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px"
-          onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'manazer',this.value)">
-      </td>
-      <td class="L" style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.pozn||''}">${r.pozn||''}</td>
+      <td style="font-size:10px;color:${kpCol};font-weight:600">${kpF<1?Math.round(kpF*100)+'%KP':''}</td>
+      <td><input type="text" value="${r.admin||''}" placeholder="administrátor"
+        style="width:100px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'admin',this.value)"></td>
+      <td><input type="text" value="${r.manazer||''}" placeholder="manažer"
+        style="width:100px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'manazer',this.value)"></td>
+      <td><input type="text" value="${r.pozn||''}" placeholder="poznámka"
+        style="width:120px;font-size:10px;border:1px solid var(--brd);border-radius:3px;padding:2px 5px;background:#fff"
+        onchange="sodUpdateField('${r.person.replace(/'/g,"\'")}',${ri},'pozn',this.value)"></td>
       <td><button onclick="sodDel('${r.person.replace(/'/g,"\'")}',${ri})" style="background:none;border:1px solid var(--brd2);border-radius:4px;padding:1px 6px;font-size:10px;cursor:pointer;color:var(--red)">✕</button></td>
     </tr>`;
   }).join('');
@@ -593,13 +601,13 @@ function renderSodList() {
           <thead><tr>
             <th class="L">Obchodník</th>
             <th class="L">Datum</th>
-            <th class="L">Lokalita</th>
+            <th class="L">Lokalita / akce</th>
             <th class="L">Zakázka</th>
             <th>Objem SoD</th>
             <th>Sleva %</th>
             <th>Sleva Kč</th>
             <th>Do KP</th>
-            <th>KP faktor</th>
+            <th>KP %</th>
             <th class="L">Administrátor</th>
             <th class="L">Manažer</th>
             <th class="L">Poznámka</th>
@@ -688,7 +696,7 @@ function buildSidebar() {
       const sod=sodAll(p);
       const sodTxt=sod>0?`<span style="color:#6a6860">${fms(sod)}</span>`:'';
       const dc=p.pd;
-      const dcCol=dc<=14?'#1a9e72':dc<=45?'#b87215':dc>=999?'rgba(255,255,255,.22)':'#bf3828';
+      const dcCol=dc<=14?'#1a9e72':dc<=45?'#b87215':dc>=999?'#bf3828':'#bf3828';
       const dcTxt=`<span style="color:${dcCol}">${dc>=999?'∅ bez SoD':dc+'d'}</span>`;
       h+=`<div class="sb-person" data-page="${pid}" onclick="showPerson('${p.n.replace(/'/g,"\\'")}')">
         ${img}
@@ -1352,16 +1360,12 @@ function renderEdit() {
       <div style="display:flex;align-items:center;gap:7px">${getPhoto(p.n,26)}<strong>${p.n}</strong></div>
     </td>
     <td class="L"><span class="bdg ${p.tym==='tech'?'bdg-t':'bdg-r'}">${p.vedouci.split(' ')[1]||p.vedouci}</span></td>
-    ${MK.map(m=>`<td><input type="number" id="s${m}${i}" value="${p.sod[m]||0}" oninput="applyEdit()"></td>`).join('')}
-    <td><input type="number" id="omtot${i}" value="${['l','u','b','d'].reduce((s,m)=>s+(p.om[m]||0),0)}" oninput="applyEdit()"></td>
-    <td><input type="number" id="vytot${i}" value="${['l','u','b','d'].reduce((s,m)=>s+(p.vy[m]||0),0)}" oninput="applyEdit()"></td>
-    <td><input type="number" id="optot${i}" value="${['l','u','b','d'].reduce((s,m)=>s+(p.op[m]||0),0)}" oninput="applyEdit()"></td>
-    <td><input type="text" id="nar${i}" value="${p.narozeni||''}" placeholder="YYYY-MM-DD" style="min-width:90px" oninput="applyEdit()"></td>
-    <td><input type="number" id="sctot${i}" value="${['l','u','b','d'].reduce((s,m)=>s+(p.sc[m]||0),0)}" oninput="applyEdit()"></td>
-    <td><input type="number" id="pd${i}" value="${p.pd}" style="width:60px;text-align:right" oninput="applyEdit()"></td>
-    <td><input type="number" id="kp${i}" value="${p.kp||0}" oninput="applyEdit()"></td>
+    ${MK.map(m=>`<td><input type="number" id="s${m}${i}" value="${p.sod[m]||0}" oninput="debouncedSave()"></td>`).join('')}
+    <td><input type="text" id="nar${i}" value="${p.narozeni||''}" placeholder="YYYY-MM-DD" style="min-width:100px" oninput="debouncedSave()"></td>
+    <td style="text-align:right;color:var(--tx3);font-size:11px" title="Počítá se z data posl. SoD">${p.pd>=999?'<span style=\"color:var(--red)\">∅</span>':p.pd+' d'}</td>
+    <td><input type="number" id="kp${i}" value="${p.kp||0}" oninput="debouncedSave()"></td>
     <td><button data-name="${p.n}" onclick="rmPerson(this)" style="background:none;border:1px solid var(--brd);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--red)">✕ Odebrat</button></td>
-    <td><select id="pot${i}" oninput="applyEdit()" style="font-size:11px;padding:3px 5px;border-radius:4px;border:1px solid var(--border2);width:auto">
+    <td><select id="pot${i}" oninput="debouncedSave()" style="font-size:11px;padding:3px 5px;border-radius:4px;border:1px solid var(--border2);width:auto">
       <option value="H" ${getPot(p)==='H'?'selected':''}>Vysoký</option>
       <option value="M" ${getPot(p)==='M'?'selected':''}>Střední</option>
       <option value="L" ${getPot(p)==='L'?'selected':''}>Nízký</option>
@@ -1371,7 +1375,7 @@ function renderEdit() {
 
   const planRows=PLANS.map((pl,i)=>`<tr>
     <td class="L"><span class="bdg ${pl.id==='rev'?'bdg-r':'bdg-t'}">${pl.label}</span></td>
-    ${['l','u','b','d','k','c'].map(m=>`<td><input type="number" id="p${i}${m}" value="${pl.plan[m]}" oninput="applyPlan()"></td>`).join('')}
+    ${MK.map(m=>`<td><input type="number" id="p${i}${m}" value="${pl.plan[m]||0}" oninput="applyPlan()" style="min-width:88px"></td>`).join('')}
   </tr>`).join('');
 
   const noteRows=PEOPLE.map((p,i)=>`
@@ -1409,8 +1413,7 @@ function renderEdit() {
       <thead><tr>
         <th class="L">Obchodník</th><th class="L">Tým</th>
         ${MNAMES.map(m=>`<th>SoD ${m}</th>`).join('')}
-        <th>OM předaná přípr.</th><th>Výbor V1</th><th>Opak. jednání</th><th>Ostatní jedn.</th><th>Narozeniny</th>
-        <th>Schůze</th><th>Dní od SoD</th><th>KP objem</th><th>Potenciál</th><th></th>
+        <th>Narozeniny</th><th title="Počítá se automaticky z data posl. SoD">Dní od SoD</th><th>KP objem</th><th>Potenciál</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
@@ -1459,18 +1462,14 @@ function renderEdit() {
 // ── SAVE HANDLERS ──────────────────────────
 function applyEdit() {
   PEOPLE.forEach((p,i)=>{
-    MK.forEach(m=>{ p.sod[m]=parseInt(document.getElementById('s'+m+i)?.value)||0; });
-    p.narozeni=document.getElementById('nar'+i)?.value||'';
-    p.posl=document.getElementById('posl'+i)?.value||p.posl;
-    p.pd=parseInt(document.getElementById('pd'+i)?.value)||0;
-    p.kp=parseInt(document.getElementById('kp'+i)?.value)||0;
-    // Activity fields edited on person card — no changes here
-    const s=document.getElementById('pot'+i); if(s) POT_OVR[p.n]=s.value;
+    MK.forEach(m=>{ const el=document.getElementById('s'+m+i); if(el) p.sod[m]=parseInt(el.value)||0; });
+    const narEl=document.getElementById('nar'+i); if(narEl) p.narozeni=narEl.value||'';
+    const kpEl=document.getElementById('kp'+i); if(kpEl) p.kp=parseInt(kpEl.value)||0;
+    const potEl=document.getElementById('pot'+i); if(potEl) POT_OVR[p.n]=potEl.value;
+    // pd is computed automatically via refreshPd()
   });
+  refreshPd();
   buildSidebar();
-  // Visual confirmation
-  const ind = document.getElementById('save-indicator');
-  if(ind){ ind.style.opacity='1'; setTimeout(()=>ind.style.opacity='0', 1500); }
 }
 function applyEdit25() {
   PEOPLE.forEach((p,i)=>{
@@ -2325,6 +2324,45 @@ async function dataSyncLoad() {
     setSyncStatus('✗ Chyba: '+e.message, 'var(--red)');
     console.error('Sync load error:', e);
   }
+}
+
+
+let _autoSaveTimer = null;
+function debouncedSave() {
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => {
+    applyEdit();
+    lsSave();
+    const ind = document.getElementById('save-indicator');
+    if(ind){ ind.textContent='✓ Uloženo'; ind.style.opacity='1'; setTimeout(()=>ind.style.opacity='0',1200); }
+  }, 800);
+}
+
+
+function sodUpdateObjem(name, idx, val) {
+  const recs = getSodRecords(name);
+  if(idx < 0 || idx >= recs.length) return;
+  const r = recs[idx];
+  const objem = Math.round(Number(val)||0);
+  r.objem_sod = objem;
+  r.sleva_kc  = Math.round(objem * (r.sleva_pct||0) / 100);
+  const kpF   = (r.sleva_pct||0)<=5?1:(r.sleva_pct||0)>=10?0:Math.max(0,1-((r.sleva_pct||0)-5)*0.20);
+  r.objem_kp  = Math.round((objem - r.sleva_kc) * kpF);
+  lsSave();
+  renderSodList();
+}
+
+function sodUpdateSleva(name, idx, val) {
+  const recs = getSodRecords(name);
+  if(idx < 0 || idx >= recs.length) return;
+  const r = recs[idx];
+  const pct   = parseFloat(val)||0;
+  r.sleva_pct = pct;
+  r.sleva_kc  = Math.round(r.objem_sod * pct / 100);
+  const kpF   = pct<=5?1:pct>=10?0:Math.max(0,1-(pct-5)*0.20);
+  r.objem_kp  = Math.round((r.objem_sod - r.sleva_kc) * kpF);
+  lsSave();
+  renderSodList();
 }
 
 // ── INIT ────────────────────────────────────────────────
