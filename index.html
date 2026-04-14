@@ -1672,11 +1672,13 @@ function showQR(name) {
 // ── YEAR STATE ──────────────────────────────────────
 let YEAR = 2026;
 const SOD2025 = {};
+const OM2025   = {};  // monthly OM counts for 2025 — filled from Excel import
 const SOD_RECORDS = {};   // {name: [{datum,objem_sod,sleva,objem_kp,pozn},...]}
 function getSodRecords(name){ if(!SOD_RECORDS[name]) SOD_RECORDS[name]=[]; return SOD_RECORDS[name]; }
 function initSOD2025() {
   PEOPLE.forEach(p=>{
     if(!SOD2025[p.n]) SOD2025[p.n]={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
+    if(!OM2025[p.n])  OM2025[p.n] ={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
   });
 }
 function setYear(y) {
@@ -2113,8 +2115,13 @@ function setPersonYear(y, name) {
 function renderCharts(p, el) {
   if(!el) return;
   const yr=_PERSON_YEAR[p.n]||2026;
-  const getSod=m=>yr===2025?(SOD2025[p.n]?.[m]||0):(p.sod[m]||0);
-  function lc(vals,color,fmt) {
+  const getSod = m => yr===2025 ? (SOD2025[p.n]?.[m]||0) : (p.sod[m]||0);
+  const getOm  = m => yr===2025 ? (OM2025[p.n]?.[m]||0)  : (p.om[m]||0);
+  const getAkt = m => yr===2025
+    ? (OM2025[p.n]?.[m]||0)
+    : aktM(p,m);
+
+  function lc(vals, color, fmt) {
     const W=280,H=48,n=vals.length,mx=Math.max(1,...vals);
     const pts=vals.map((v,i)=>((i/(n-1))*W).toFixed(1)+','+((1-v/mx)*H).toFixed(1)).join(' ');
     const dots=vals.map((v,i)=>{
@@ -2126,10 +2133,49 @@ function renderCharts(p, el) {
     const ticks=MNAMES.map((m,i)=>'<text x="'+((i/(n-1))*W).toFixed(1)+'" y="'+(H+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+m.slice(0,3)+'</text>').join('');
     return '<svg viewBox="-4 -8 '+(W+8)+' '+(H+24)+'" style="width:100%;height:66px;overflow:visible"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round"/>'+dots+ticks+'</svg>';
   }
-  el.innerHTML=
-    '<div class="ctitle" style="margin-bottom:2px">SoD — objem '+yr+'</div>'+lc(MK.map(m=>getSod(m)),'var(--rev)',v=>fm(v))
-    +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">OM předaná přípravě — počet '+yr+'</div>'+lc(MK.map(m=>p.om[m]||0),'var(--grn)',v=>v)
-    +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">Aktivita celkem '+yr+'</div>'+lc(MK.map(m=>aktM(p,m)),'var(--tech)',v=>v);
+
+  // Dual-year comparison chart
+  function lc2(vals26, vals25, color, fmt) {
+    const W=280,H=48,n=vals26.length,mx=Math.max(1,...vals26,...vals25);
+    const line = (vals,col,dash) => {
+      const pts=vals.map((v,i)=>((i/(n-1))*W).toFixed(1)+','+((1-v/mx)*H).toFixed(1)).join(' ');
+      return '<polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-dasharray="'+(dash?'4,3':'')+'" stroke-linejoin="round"/>';
+    };
+    const dots26=vals26.map((v,i)=>{
+      const x=((i/(n-1))*W).toFixed(1),y=((1-v/mx)*H).toFixed(1);
+      return v>0?'<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="'+color+'" stroke="#fff" stroke-width="1.5"/><text x="'+x+'" y="'+(parseFloat(y)-6)+'" text-anchor="middle" font-size="8" fill="'+color+'" font-weight="700">'+fmt(v)+'</text>':'';
+    }).join('');
+    const ticks=MNAMES.map((m,i)=>'<text x="'+((i/(n-1))*W).toFixed(1)+'" y="'+(H+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+m.slice(0,3)+'</text>').join('');
+    const legend='<text x="0" y="-1" font-size="7.5" fill="'+color+'" font-weight="700">2026</text>'
+      +'<text x="26" y="-1" font-size="7.5" fill="var(--tx3)">2025 (čárkovaně)</text>';
+    return '<svg viewBox="-4 -8 '+(W+8)+' '+(H+24)+'" style="width:100%;height:66px;overflow:visible">'
+      +legend+line(vals25,'var(--tx3)',true)+line(vals26,color,false)+dots26+ticks+'</svg>';
+  }
+
+  const sod26 = MK.map(m=>p.sod[m]||0);
+  const sod25 = MK.map(m=>SOD2025[p.n]?.[m]||0);
+  const om26  = MK.map(m=>p.om[m]||0);
+  const om25  = MK.map(m=>OM2025[p.n]?.[m]||0);
+  const hasSod25 = sod25.some(v=>v>0);
+  const hasOm25  = om25.some(v=>v>0);
+
+  if(yr===2026 && (hasSod25||hasOm25)) {
+    el.innerHTML=
+      '<div class="ctitle" style="margin-bottom:2px">SoD — objem 2026 vs 2025</div>'
+      +(hasSod25?lc2(sod26,sod25,'var(--rev)',v=>fm(v)):lc(sod26,'var(--rev)',v=>fm(v)))
+      +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">OM předaná přípravě 2026 vs 2025</div>'
+      +(hasOm25?lc2(om26,om25,'var(--grn)',v=>v):lc(om26,'var(--grn)',v=>v))
+      +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">Aktivita celkem 2026</div>'
+      +lc(MK.map(m=>aktM(p,m)),'var(--tech)',v=>v);
+  } else {
+    el.innerHTML=
+      '<div class="ctitle" style="margin-bottom:2px">SoD — objem '+yr+'</div>'
+      +lc(MK.map(m=>getSod(m)),'var(--rev)',v=>fm(v))
+      +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">OM předaná přípravě — počet '+yr+'</div>'
+      +lc(MK.map(m=>getOm(m)),'var(--grn)',v=>v)
+      +'<div class="ctitle" style="margin-bottom:2px;margin-top:10px">Aktivita celkem '+yr+'</div>'
+      +lc(MK.map(m=>getAkt(m)),'var(--tech)',v=>v);
+  }
 }
 
 function saveActivity(el) {
@@ -2336,10 +2382,23 @@ function sodUpdateSleva(name, idx, val) {
 // Klíče jsou na serveru v env variables — kolegové je nevidí
 // ══════════════════════════════════════════════════════════════════
 
-// Detect API base URL: same origin in production, or localhost:3000 in dev
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:3000'
-  : window.location.origin;
+// Server URL — stored in localStorage so colleagues don't need to configure
+// Auto-detected when served directly from Render (same origin)
+// Must be manually set when opening from GitHub Pages or local file
+const LS_SERVER_URL = 'rbd_server_url';
+
+function getApiBase() {
+  try {
+    const stored = localStorage.getItem(LS_SERVER_URL);
+    if(stored && stored.startsWith('http')) return stored.replace(/\/$/, '');
+    const h = window.location.hostname || '';
+    const proto = window.location.protocol || '';
+    if(h === 'localhost' || h === '127.0.0.1' || proto.startsWith('file')) {
+      return 'http://localhost:3000';
+    }
+    return window.location.origin || '';
+  } catch(e) { return ''; }
+}
 
 function setSaveStatus(msg, col) {
   document.querySelectorAll('.save-status').forEach(el => {
@@ -2383,6 +2442,7 @@ function applyPayload(d) {
     const pl = PLANS.find(x => x.id === s.id); if(pl) Object.assign(pl.plan, s.plan);
   });
   if(d.sod2025) Object.assign(SOD2025, d.sod2025);
+  if(d.om2025)  Object.assign(OM2025,  d.om2025);
   if(d.overrides) d.overrides.forEach(ov => {
     const p = PEOPLE.find(x => x.n === ov.n); if(!p) return;
     if(ov.posl)    p.posl = ov.posl;
@@ -2420,19 +2480,31 @@ function lsSave() {
   lsCache();
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(async () => {
+    const base = getApiBase();
+    if(!base || base.includes('github.io') || base.startsWith('file')) {
+      setSaveStatus('💾 lokálně (nastav server ☁)', '#b87215');
+      return;
+    }
     try {
       setSaveStatus('☁ ukládám…', '#b87215');
-      const resp = await fetch(API_BASE + '/api/save', {
+      let payload;
+      try { payload = JSON.stringify(getSavePayload()); }
+      catch(je) { setSaveStatus('⚠ chyba dat: '+je.message.slice(0,40), '#bf3828'); return; }
+      const resp = await fetch(base + '/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(getSavePayload())
+        body: payload
       });
+      if(!resp.ok) {
+        const txt = await resp.text().catch(()=>'');
+        throw new Error('HTTP ' + resp.status + (txt ? ': '+txt.slice(0,60) : ''));
+      }
       const result = await resp.json();
       if(!result.ok) throw new Error(result.error || 'Chyba serveru');
       lsCache();
       setSaveStatus('☁ uloženo ' + new Date().toLocaleTimeString('cs'), '#1a9e72');
     } catch(e) {
-      setSaveStatus('⚠ ' + (e.message.includes('fetch') ? 'server nedostupný' : e.message.slice(0,40)), '#bf3828');
+      setSaveStatus('⚠ ' + e.message.slice(0,50), '#bf3828');
       console.warn('save error:', e);
     }
   }, 1500);
@@ -2441,8 +2513,11 @@ function lsSave() {
 async function sbLoad() {
   try {
     setSaveStatus('☁ načítám…', '#b87215');
-    const resp = await fetch(API_BASE + '/api/load');
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const resp = await fetch(getApiBase() + '/api/load');
+    if(!resp.ok) {
+      const txt = await resp.text();
+      throw new Error('HTTP ' + resp.status + ' ' + txt.slice(0,60));
+    }
     const result = await resp.json();
     if(result.data) {
       applyPayload(result.data);
@@ -2459,8 +2534,97 @@ async function sbLoad() {
   }
 }
 
+
+function showServerConfig() {
+  const cur = localStorage.getItem('rbd_server_url') || '';
+  document.getElementById('sc-url-input').value = cur || getApiBase();
+  document.getElementById('sc-status').textContent = '';
+  document.getElementById('server-config-modal').style.display = 'flex';
+}
+function closeServerConfig() {
+  document.getElementById('server-config-modal').style.display = 'none';
+}
+async function saveServerConfig() {
+  const url = document.getElementById('sc-url-input').value.trim().replace(/\/$/, '');
+  const st  = document.getElementById('sc-status');
+  if(!url.startsWith('http')) { st.textContent = 'URL musí začínat http'; st.style.color='#bf3828'; return; }
+  st.textContent = 'Testuji spojení…'; st.style.color='#b87215';
+  try {
+    const r = await fetch(url + '/api/health', {signal: AbortSignal.timeout(5000)});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    localStorage.setItem('rbd_server_url', url);
+    st.textContent = '✓ Spojení OK — ukládám'; st.style.color='#1a9e72';
+    setTimeout(() => { closeServerConfig(); sbLoad().then(()=>{ refreshPd(); buildSidebar(); renderOverview(); }); }, 800);
+  } catch(e) {
+    st.textContent = '✗ Nelze se připojit: ' + e.message.slice(0,60);
+    st.style.color = '#bf3828';
+  }
+}
+
+
+function import2025(data) {
+  // data = {sod:{name:{l,u,b,...}}, om:{name:{l,u,b,...}}}
+  if(data.sod) Object.keys(data.sod).forEach(name => {
+    if(!SOD2025[name]) SOD2025[name]={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
+    Object.assign(SOD2025[name], data.sod[name]);
+  });
+  if(data.om) Object.keys(data.om).forEach(name => {
+    if(!OM2025[name]) OM2025[name]={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
+    Object.assign(OM2025[name], data.om[name]);
+  });
+  if(data.sod2025) Object.keys(data.sod2025).forEach(name => {
+    if(!SOD2025[name]) SOD2025[name]={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
+    Object.assign(SOD2025[name], data.sod2025[name]);
+  });
+  lsSave();
+  buildSidebar();
+  renderOverview();
+  alert('Data 2025 importována. Přepni rok na 2025 na osobní kartě pro zobrazení.');
+}
+
+function handleImportJSON(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      // Support both full export format and dedicated 2025 import format
+      if(d.sod || d.om || d.sod2025) { import2025(d); }
+      else { applyPayload(d); lsSave(); buildSidebar(); renderOverview(); alert('Data importována.'); }
+    } catch(err) { alert('Chyba při parsování JSON: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+
 // ── INIT ────────────────────────────────────────────────
 initSOD2025();
+
+// ── OM 2025 data (OM předaná přípravě) ──
+  OM2025['Marek Novák'] = {"l": 1, "u": 6, "b": 5, "d": 6, "k": 0, "c": 5, "ce": 4, "sr": 2, "za": 10, "ri": 2, "li": 7, "pr": 4};
+  OM2025['Lukáš Apfelthaler'] = {"l": 0, "u": 8, "b": 1, "d": 3, "k": 3, "c": 1, "ce": 9, "sr": 1, "za": 0, "ri": 3, "li": 2, "pr": 4};
+  OM2025['Viktor Valentini'] = {"l": 0, "u": 6, "b": 3, "d": 2, "k": 4, "c": 2, "ce": 1, "sr": 2, "za": 7, "ri": 3, "li": 1, "pr": 0};
+  OM2025['Daniel Králík'] = {"l": 2, "u": 1, "b": 2, "d": 1, "k": 2, "c": 1, "ce": 3, "sr": 0, "za": 7, "ri": 7, "li": 17, "pr": 5};
+  OM2025['Ondřej Bambous'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Milan Herold'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Michal Sodomka'] = {"l": 7, "u": 7, "b": 11, "d": 1, "k": 7, "c": 4, "ce": 2, "sr": 7, "za": 5, "ri": 2, "li": 3, "pr": 2};
+  OM2025['Jan Kudrna'] = {"l": 7, "u": 8, "b": 3, "d": 2, "k": 3, "c": 8, "ce": 6, "sr": 5, "za": 3, "ri": 0, "li": 3, "pr": 8};
+  OM2025['Michal Smolík'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 10, "za": 15, "ri": 4, "li": 3, "pr": 1};
+  OM2025['Lukáš Gabčo'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Rostislav Truhlář'] = {"l": 0, "u": 6, "b": 4, "d": 5, "k": 2, "c": 4, "ce": 6, "sr": 1, "za": 4, "ri": 2, "li": 0, "pr": 0};
+  OM2025['Josef Chadraba'] = {"l": 0, "u": 9, "b": 7, "d": 4, "k": 1, "c": 5, "ce": 2, "sr": 6, "za": 7, "ri": 6, "li": 4, "pr": 0};
+  OM2025['Radim Rzyman'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 3, "ri": 3, "li": 3, "pr": 5};
+  OM2025['Jan Pavlík'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Leoš Štryncl'] = {"l": 4, "u": 14, "b": 5, "d": 7, "k": 4, "c": 7, "ce": 5, "sr": 3, "za": 10, "ri": 6, "li": 5, "pr": 4};
+  OM2025['Pavel Velín'] = {"l": 5, "u": 5, "b": 6, "d": 2, "k": 3, "c": 2, "ce": 2, "sr": 0, "za": 2, "ri": 6, "li": 1, "pr": 5};
+  OM2025['Jakub Zeman'] = {"l": 0, "u": 1, "b": 13, "d": 4, "k": 3, "c": 9, "ce": 2, "sr": 1, "za": 3, "ri": 3, "li": 6, "pr": 3};
+  OM2025['Václav Slavík'] = {"l": 5, "u": 4, "b": 3, "d": 3, "k": 10, "c": 7, "ce": 2, "sr": 13, "za": 13, "ri": 3, "li": 8, "pr": 4};
+  OM2025['Lukáš Hilpert'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Petr Militký'] = {"l": 7, "u": 2, "b": 0, "d": 2, "k": 4, "c": 5, "ce": 0, "sr": 0, "za": 11, "ri": 1, "li": 5, "pr": 9};
+  OM2025['Ondřej Lička'] = {"l": 3, "u": 2, "b": 5, "d": 1, "k": 2, "c": 4, "ce": 1, "sr": 1, "za": 5, "ri": 0, "li": 5, "pr": 2};
+  OM2025['Ondřej Kupský'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+  OM2025['Jaroslav Esterka'] = {"l": 0, "u": 0, "b": 0, "d": 0, "k": 0, "c": 0, "ce": 0, "sr": 0, "za": 0, "ri": 0, "li": 0, "pr": 0};
+
 
 // Všechny SoD záznamy z SoD_přehled.xlsx (2020–2026)
   SOD_RECORDS['Josef Hynek'] = [{datum:'2020-08-20',objem_sod:4964725,sleva_pct:0.0,sleva_kc:0.0,objem_kp:4964725,akce:'Týnec nad Sázavou, Okružní 277',cislo:'Z095641-EP',pozn:'ohrožená',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2020-08-27',objem_sod:5247581,sleva_pct:0.0,sleva_kc:0.0,objem_kp:5247581,akce:'Jihlava, U Cihelny 2696/5',cislo:'Z133368-EP',pozn:'Výtahy, nižší PH, dopad na KP. Bonus z ceny balkonů.',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2020-11-13',objem_sod:1633900,sleva_pct:3.17,sleva_kc:51795,objem_kp:1582105,akce:'Říčany, Purkyňova 1705',cislo:'Z131428-EP',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-04-21',objem_sod:2810549,sleva_pct:0.0,sleva_kc:0.0,objem_kp:2810549,akce:'Praha, K Milíčovu 3',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-04-29',objem_sod:913707,sleva_pct:0.0,sleva_kc:0.0,objem_kp:913707,akce:'Praha, Hanusova 22',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-05-06',objem_sod:8837,sleva_pct:0.0,sleva_kc:0.0,objem_kp:8837,akce:'dodatek 1, Praha, Hanusova 22',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-07-19',objem_sod:954851,sleva_pct:0.0,sleva_kc:0.0,objem_kp:954851,akce:'Kostelec n.Č.LESY, Dr.Trippé 1053',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-09-09',objem_sod:2003027,sleva_pct:0.0,sleva_kc:0.0,objem_kp:2003027,akce:'Praha, Snopkova 486/13',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-09-22',objem_sod:1277324,sleva_pct:5.0,sleva_kc:63866,objem_kp:1213458,akce:'Příbram, Šikmá 477',cislo:'',pozn:'VCP - uplatnění slevy při realizace',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2021-10-29',objem_sod:17068342,sleva_pct:0.0,sleva_kc:0.0,objem_kp:17068342,akce:'Březnice, Rožmitálská 125',cislo:'',pozn:'info o věceh zdarma až před realizací? Ověřit dveře, žebřík, tablo. Tablo a dveře na šachtě ZDARMA. ',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2022-04-29',objem_sod:1616750,sleva_pct:1.7,sleva_kc:27485,objem_kp:1589265,akce:'Ledeč n.S., Stínadla 1094',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2022-04-29',objem_sod:1658371,sleva_pct:0.0,sleva_kc:0.0,objem_kp:1658371,akce:'Ledeč n.S., Stínadla 1045',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2022-05-17',objem_sod:543519,sleva_pct:0.0,sleva_kc:0.0,objem_kp:543519,akce:'Vitice, Dobré Pole 57',cislo:'',pozn:'RD, mělo být s BD. Podpis jen RD, proto BONUS nevyplácet',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2022-05-30',objem_sod:381422,sleva_pct:0.0,sleva_kc:0.0,objem_kp:381422,akce:'Světlá nad Sázavou, Sázavská 584',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'},{datum:'2022-06-06',objem_sod:3100004,sleva_pct:0.0,sleva_kc:0.0,objem_kp:3100004,akce:'Říčany, Poláčkova 1689',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RF'}];
@@ -2536,8 +2700,36 @@ refreshPd();
 buildSidebar();
 renderOverview();
 setInterval(refreshPd, 3600000);
+// Show server config if not set and not on same-origin server
+setTimeout(() => {
+  const stored = localStorage.getItem('rbd_server_url');
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const isFile = window.location.protocol.startsWith('file');
+  const isGithubPages = window.location.hostname.includes('github.io');
+  if(!stored && (isLocalhost || isFile || isGithubPages)) {
+    showServerConfig();
+  }
+}, 2000);
 
 </script>
+<!-- Server Config Modal -->
+<div id="server-config-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:26px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+    <div style="font-size:15px;font-weight:500;color:#181715;margin-bottom:6px">☁ Adresa serveru pro ukládání</div>
+    <div style="font-size:12px;color:#6a6860;margin-bottom:16px">Zadej URL Render.com serveru. Uloží se do prohlížeče — stačí nastavit jednou na každém zařízení.</div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:500;color:#444;display:block;margin-bottom:4px">Server URL</label>
+      <input id="sc-url-input" type="text" placeholder="https://rbd-dashboard-20264.onrender.com"
+        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;font-family:monospace;box-sizing:border-box">
+    </div>
+    <div id="sc-status" style="font-size:12px;min-height:18px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="closeServerConfig()" style="padding:8px 16px;border:1px solid #ddd;border-radius:7px;background:#fff;font-size:12px;cursor:pointer">Zrušit</button>
+      <button onclick="saveServerConfig()" style="padding:8px 16px;border:none;border-radius:7px;background:#154b85;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Uložit a připojit</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- Cloud Settings Modal -->
 <div id="cloud-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
