@@ -1,6 +1,3 @@
-
-Copy
-
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
@@ -8,17 +5,12 @@ const fs      = require('fs');
 const app  = express();
 const PORT = process.env.PORT || 3000;
  
-// Data file — Render persistent disk mounts at /data
-// Locally falls back to ./rbd_data.json next to server.js
 const DATA_DIR  = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'rbd_data.json');
- 
-// Optional write password (set RBD_WRITE_KEY in Render env vars)
 const WRITE_KEY = process.env.RBD_WRITE_KEY || '';
  
 app.use(express.json({ limit: '5mb' }));
  
-// CORS — allow any origin (teammates from different devices)
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -26,8 +18,6 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
- 
-// ── API routes (must be before static middleware) ──────────────────
  
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, ts: new Date().toISOString(), file: DATA_FILE });
@@ -57,8 +47,6 @@ app.post('/api/save', (req, res) => {
   }
 });
  
-// ── Serve index.html from the SAME directory as server.js ─────────
-// Works whether index.html is in root or public/ subfolder
 const STATIC_DIR = fs.existsSync(path.join(__dirname, 'public', 'index.html'))
   ? path.join(__dirname, 'public')
   : __dirname;
@@ -67,14 +55,13 @@ console.log('Serving static files from:', STATIC_DIR);
  
 app.use(express.static(STATIC_DIR));
  
-// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(STATIC_DIR, 'index.html'));
 });
  
 app.listen(PORT, () => {
-  console.log(`RBD Dashboard server běží na portu ${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
-  console.log(`Write key: ${WRITE_KEY ? 'nastaven' : 'není (otevřený zápis)'}`);
+  console.log('RBD Dashboard server bezi na portu ' + PORT);
+  console.log('Data file: ' + DATA_FILE);
+  console.log('Write key: ' + (WRITE_KEY ? 'nastaven' : 'neni (otevreny zapis)'));
 });
  
