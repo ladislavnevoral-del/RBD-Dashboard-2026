@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: rbd-dashboard-2026
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    disk:
+      name: rbd-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: NODE_ENV
+        value: production
+      - key: RBD_WRITE_KEY
+        generateValue: true

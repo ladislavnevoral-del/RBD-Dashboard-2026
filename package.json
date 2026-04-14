@@ -1,0 +1,16 @@
+{
+  "name": "rbd-dashboard-2026",
+  "version": "1.0.0",
+  "description": "RBD Dashboard 2026 — backend API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

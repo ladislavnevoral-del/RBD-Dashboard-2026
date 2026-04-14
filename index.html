@@ -342,42 +342,9 @@ function getPersonPlan(p) {
 // ── LOCALSTORAGE PERSISTENCE ──────────────────────────
 const LS_KEY = 'rbd_v9_2026';
 
-function lsSave() {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify({
-      notes: NOTES, pot: POT_OVR, pipeline: PIPELINE, sod2025: SOD2025, sod_records: SOD_RECORDS,
-      overrides: PEOPLE.map(p=>({
-        n:p.n, posl:p.posl, pd:p.pd, kp:p.kp, kpp:p.kpp,
-        narozeni:p.narozeni||'', akcni_plan:!!p.akcni_plan,
-        sod:{...p.sod}, om:{...p.om}, vy:{...p.vy}, op:{...p.op}, sc:{...p.sc}, jd:{...(p.jd||{})}
-      }))
-    }));
-    const ind=document.getElementById('save-indicator');
-    if(ind){ind.style.opacity='1';setTimeout(()=>ind.style.opacity='0',1200);}
-  } catch(e) { console.warn('lsSave:', e); }
-}
+// lsSave is defined in Supabase section above
 
-function lsLoad() {
-  try {
-    const raw=localStorage.getItem(LS_KEY); if(!raw) return;
-    const d=JSON.parse(raw);
-    if(d.notes) Object.assign(NOTES,d.notes);
-    if(d.pot) Object.assign(POT_OVR,d.pot);
-    if(d.pipeline) {
-      Object.assign(PIPELINE,d.pipeline);
-      // Ensure objem values are numbers (fix for old string saves)
-      Object.values(PIPELINE).forEach(arr => arr.forEach(r => { r.objem=Number(r.objem)||0; r.kval=Number(r.kval)||1; }));
-    }
-    if(d.sod2025) Object.assign(SOD2025,d.sod2025);
-    if(d.overrides) d.overrides.forEach(ov=>{
-      const p=PEOPLE.find(x=>x.n===ov.n); if(!p) return;
-      ['posl','narozeni'].forEach(f=>{if(ov[f]) p[f]=ov[f];});
-      ['pd','kp','kpp'].forEach(f=>{if(ov[f]!==undefined) p[f]=ov[f];});
-      if(ov.akcni_plan!==undefined) p.akcni_plan=ov.akcni_plan;
-      ['sod','om','vy','op','sc'].forEach(f=>{if(ov[f]) Object.assign(p[f],ov[f]);});
-    });
-  } catch(e) { console.warn('lsLoad:', e); }
-}
+// lsLoad is defined in Supabase section above
 function fixPipelineObjem() {
   Object.values(PIPELINE).forEach(arr => arr && arr.forEach(r => {
     r.kval = Number(r.kval)||1;
@@ -551,8 +518,6 @@ function renderSodList() {
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span id="sod-sync-status" style="font-size:10px;color:var(--tx3)"></span>
       <button onclick="sodExportCSV()" class="btn">↓ CSV</button>
-      <button onclick="dataSyncSave()" class="btn" style="background:var(--tech);color:#fff;border-color:var(--tech)">☁ Uložit do webu</button>
-      <button onclick="dataSyncLoad()" class="btn">☁ Načíst z webu</button>
     </div>
   </div>
 
@@ -1639,14 +1604,14 @@ function exportOnePager(name) {
   pg+='<div class="card"><div class="ctitle">Anal\xfdza a doporu\u010den\xed</div>'+rH+'</div>';
   pg+='<div class="card"><div class="ctitle">Pozn\xe1mky z review</div><div style="background:#fafaf7;border:1px dashed #ccc9be;border-radius:4px;padding:7px;min-height:'+(notes?'auto':'55px')+';font-size:10px;color:'+(notes?'#181715':'#9a9890')+'">'+(notes||'(doplnit p\u0159i review)')+'</div></div>';
   pg+='</div></div><div class="ftr"><span>'+tl+' / '+p.vedouci+' &middot; '+p.sen+'</span><span>RBD Dashboard 2026 &middot; KARAT 2026, t\xfddn\xed reporty</span></div></div>';
-  pg+='<script>window.onload=function(){window.print();}<\/script></body></html>';
+  pg+='</body></html>';
 
   // Open print window - works in Chrome, Firefox, Safari
   const w = window.open('', '_blank');
   if(w) {
     w.document.open();
     w.document.write(pg);
-    w.document.close();
+    w.document.close(); setTimeout(() => w.print(), 500);
   } else {
     // Fallback: download as HTML file (Safari sometimes blocks popups)
     const blob = new Blob([pg], {type: 'text/html;charset=utf-8'});
@@ -2365,6 +2330,135 @@ function sodUpdateSleva(name, idx, val) {
   renderSodList();
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// CLOUD SYNC — vlastní backend API (/api/load, /api/save)
+// Klíče jsou na serveru v env variables — kolegové je nevidí
+// ══════════════════════════════════════════════════════════════════
+
+// Detect API base URL: same origin in production, or localhost:3000 in dev
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:3000'
+  : window.location.origin;
+
+function setSaveStatus(msg, col) {
+  document.querySelectorAll('.save-status').forEach(el => {
+    el.textContent = msg; el.style.color = col || '#888';
+  });
+  const ind = document.getElementById('save-indicator');
+  if(ind) { ind.textContent = msg; ind.style.opacity = '1'; setTimeout(() => ind.style.opacity = '0', 3500); }
+}
+
+function getSavePayload() {
+  const sodEdits = {};
+  PEOPLE.forEach(p => {
+    const edits = getSodRecords(p.n).filter(r => r.admin || r.manazer || r._user);
+    if(edits.length) sodEdits[p.n] = edits;
+  });
+  return {
+    v: 3, ts: new Date().toISOString(),
+    notes: NOTES, pot: POT_OVR, pipeline: PIPELINE, sod2025: SOD2025,
+    plans: PLANS.map(pl => ({id: pl.id, plan: {...pl.plan}})),
+    sod_edits: sodEdits,
+    overrides: PEOPLE.map(p => ({
+      n: p.n, posl: p.posl, pd: p.pd, kp: p.kp, kpp: p.kpp,
+      narozeni: p.narozeni || '', akcni_plan: !!p.akcni_plan,
+      sod: {...p.sod}, om: {...p.om}, vy: {...p.vy},
+      op: {...p.op}, sc: {...p.sc}, jd: {...(p.jd||{})}
+    }))
+  };
+}
+
+function applyPayload(d) {
+  if(!d || !d.v) return;
+  if(d.notes)    Object.assign(NOTES, d.notes);
+  if(d.pot)      Object.assign(POT_OVR, d.pot);
+  if(d.pipeline) {
+    Object.assign(PIPELINE, d.pipeline);
+    Object.values(PIPELINE).forEach(arr => arr.forEach(r => {
+      r.objem = Number(r.objem)||0; r.kval = Number(r.kval)||1;
+    }));
+  }
+  if(d.plans) d.plans.forEach(s => {
+    const pl = PLANS.find(x => x.id === s.id); if(pl) Object.assign(pl.plan, s.plan);
+  });
+  if(d.sod2025) Object.assign(SOD2025, d.sod2025);
+  if(d.overrides) d.overrides.forEach(ov => {
+    const p = PEOPLE.find(x => x.n === ov.n); if(!p) return;
+    if(ov.posl)    p.posl = ov.posl;
+    if(ov.narozeni) p.narozeni = ov.narozeni;
+    if(ov.pd  !== undefined) p.pd  = ov.pd;
+    if(ov.kp  !== undefined) p.kp  = ov.kp;
+    if(ov.kpp !== undefined) p.kpp = ov.kpp;
+    if(ov.akcni_plan !== undefined) p.akcni_plan = ov.akcni_plan;
+    ['sod','om','vy','op','sc'].forEach(f => { if(ov[f]) Object.assign(p[f], ov[f]); });
+    if(ov.jd && p.jd) Object.assign(p.jd, ov.jd);
+  });
+  if(d.sod_edits) Object.keys(d.sod_edits).forEach(name => {
+    const recs = getSodRecords(name);
+    (d.sod_edits[name]||[]).forEach(edit => {
+      const r = recs.find(x => x.datum === edit.datum && x.objem_sod === edit.objem_sod);
+      if(r) { if(edit.admin) r.admin=edit.admin; if(edit.manazer) r.manazer=edit.manazer; if(edit.pozn) r.pozn=edit.pozn; }
+      else if(edit._user) recs.push(edit);
+    });
+  });
+}
+
+// ─── localStorage cache ────────────────────────────────────────────
+function lsCache() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(getSavePayload())); } catch(e) {}
+}
+function lsLoad() {
+  try {
+    const raw = localStorage.getItem(LS_KEY); if(raw) applyPayload(JSON.parse(raw));
+  } catch(e) { console.warn('lsLoad:', e); }
+}
+
+// ─── API calls ────────────────────────────────────────────────────
+let _saveTimer = null;
+function lsSave() {
+  lsCache();
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    try {
+      setSaveStatus('☁ ukládám…', '#b87215');
+      const resp = await fetch(API_BASE + '/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getSavePayload())
+      });
+      const result = await resp.json();
+      if(!result.ok) throw new Error(result.error || 'Chyba serveru');
+      lsCache();
+      setSaveStatus('☁ uloženo ' + new Date().toLocaleTimeString('cs'), '#1a9e72');
+    } catch(e) {
+      setSaveStatus('⚠ ' + (e.message.includes('fetch') ? 'server nedostupný' : e.message.slice(0,40)), '#bf3828');
+      console.warn('save error:', e);
+    }
+  }, 1500);
+}
+
+async function sbLoad() {
+  try {
+    setSaveStatus('☁ načítám…', '#b87215');
+    const resp = await fetch(API_BASE + '/api/load');
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const result = await resp.json();
+    if(result.data) {
+      applyPayload(result.data);
+      lsCache();
+      setSaveStatus('☁ sync ' + new Date().toLocaleTimeString('cs'), '#1a9e72');
+    } else {
+      lsLoad(); // nothing on server yet — use localStorage
+      setSaveStatus('☁ připojeno (nová data)', '#1a9e72');
+    }
+  } catch(e) {
+    console.warn('sbLoad failed, using localStorage:', e.message);
+    lsLoad();
+    setSaveStatus('💾 offline — lokální data', '#b87215');
+  }
+}
+
 // ── INIT ────────────────────────────────────────────────
 initSOD2025();
 
@@ -2436,7 +2530,7 @@ initSOD2025();
   SOD_RECORDS['Radim Rzyman'] = [{datum:'2025-11-14',objem_sod:5471292,sleva_pct:0.0,sleva_kc:0.0,objem_kp:5471292,akce:'Hranice, Pod Lipami 1284',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'},{datum:'2025-11-30',objem_sod:6708240,sleva_pct:5.0,sleva_kc:335412,objem_kp:6372828,akce:'Hulín, Záhlinická 801',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'},{datum:'2026-03-19',objem_sod:5206682,sleva_pct:0.0,sleva_kc:0.0,objem_kp:5206682,akce:'Přerov, Želetavská 2573',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'},{datum:'2026-03-19',objem_sod:14848986,sleva_pct:5.0,sleva_kc:742449,objem_kp:14106537,akce:'Přerov, Kabelíkova 1331/3',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'}];
   SOD_RECORDS['Vlastimil Kopečný'] = [{datum:'2026-03-31',objem_sod:443622,sleva_pct:0.0,sleva_kc:0.0,objem_kp:443622,akce:'Modřice, Pilcova 561',cislo:'',pozn:'bez provize pro TOP a vedoucí',admin:'',manazer:'',rbd_rf:'RBD'}];
   SOD_RECORDS['osef Chadraba'] = [{datum:'2026-04-08',objem_sod:11805103,sleva_pct:0.0,sleva_kc:0.0,objem_kp:11805103,akce:'Bruntál',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'}];
-lsLoad();
+sbLoad().then(()=>{ fixPipelineObjem(); refreshPd(); buildSidebar(); renderOverview(); });
 fixPipelineObjem();
 refreshPd();
 buildSidebar();
@@ -2444,5 +2538,34 @@ renderOverview();
 setInterval(refreshPd, 3600000);
 
 </script>
+
+<!-- Cloud Settings Modal -->
+<div id="cloud-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:28px;width:520px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">☁ Cloudové úložiště — Supabase</div>
+    <div style="font-size:12px;color:#6a6860;margin-bottom:16px">Nastavte jednou — data se pak ukládají automaticky při každé změně.</div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:11px;line-height:1.7">
+      <strong>Nastavení (zdarma, 2 minuty):</strong><br>
+      1. Jdi na <a href="https://supabase.com" target="_blank" style="color:#154b85;font-weight:600">supabase.com</a> → <strong>New project</strong><br>
+      2. <strong>Settings → API</strong> → zkopíruj <em>Project URL</em> a <em>anon public</em> klíč<br>
+      3. <strong>SQL Editor</strong> → spusť:<br>
+      <code style="display:block;background:#e8f0fe;padding:6px 8px;border-radius:4px;margin-top:4px;font-size:10px">CREATE TABLE rbd_data (key TEXT PRIMARY KEY, value JSONB, ts TIMESTAMPTZ DEFAULT now());</code>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:700;color:#444;display:block;margin-bottom:4px">Project URL</label>
+      <input id="modal-sb-url" type="text" placeholder="https://xxxxxxxxxxxx.supabase.co"
+        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:monospace">
+    </div>
+    <div style="margin-bottom:22px">
+      <label style="font-size:11px;font-weight:700;color:#444;display:block;margin-bottom:4px">Anon (public) API Key</label>
+      <input id="modal-sb-key" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:monospace">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="closeCloudSettings()" style="padding:9px 18px;border:1px solid #ddd;border-radius:7px;background:#fff;font-size:12px;cursor:pointer">Zrušit</button>
+      <button onclick="saveCloudSettings()" style="padding:9px 18px;border:none;border-radius:7px;background:#154b85;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Uložit a připojit</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
