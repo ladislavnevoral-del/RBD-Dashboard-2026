@@ -508,7 +508,7 @@ function renderSodList() {
   if(fFrom)   allRecs = allRecs.filter(r => r.datum >= fFrom);
   if(fTo)     allRecs = allRecs.filter(r => r.datum <= fTo);
 
-  allRecs.sort((a,b) => a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0);
+  allRecs.sort((a,b) => a.datum > b.datum ? -1 : a.datum < b.datum ? 1 : 0); // nejnovější nahoře
 
   const totObjem = allRecs.reduce((s,r) => s+(r.objem_sod||0), 0);
   const totKp    = allRecs.reduce((s,r) => s+(r.objem_kp||0), 0);
@@ -1358,9 +1358,36 @@ function renderPerson(p,pg) {
 
       <div class="card mt12">
         <div class="ctitle">SoD 2026 — skutečnost vs. plán</div>
-        ${sBars}
-        ${sodPlanRows}
-        ${tot===0?'<div style="color:var(--text3);font-size:12px;padding:6px 0">Žádný SoD v roce 2026</div>':''}
+        ${(()=>{
+          const mx=Math.max(1,...sV,...sP);
+          let rows='';
+          let hasAny=false;
+          MK.forEach((m,i)=>{
+            const sv=sV[i]||0, sp=sP[i]||0;
+            if(sv===0&&sp===0) return;
+            hasAny=true;
+            const pct=sp>0?Math.round(sv/sp*100):null;
+            const col=pct===null?'var(--rev)':pct>=100?'#1a9e72':pct>=60?'#c07a00':'#bf3828';
+            const wSv=Math.round(sv/mx*100), wSp=Math.round(sp/mx*100);
+            rows+='<div style="display:grid;grid-template-columns:70px 1fr 130px;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--brd)">'
+              +'<div style="font-size:11px;color:var(--tx3)">'+MNAMES[i]+'</div>'
+              +'<div style="position:relative;height:12px;border-radius:3px;overflow:hidden;background:var(--brd)">'
+                +(sp>0?'<div style="position:absolute;left:0;top:0;width:'+wSp+'%;height:100%;background:var(--brd);border-radius:3px"></div>':'')
+                +(sv>0?'<div style="position:absolute;left:0;top:0;width:'+wSv+'%;height:100%;background:'+col+';border-radius:3px"></div>':'')
+              +'</div>'
+              +'<div style="text-align:right;white-space:nowrap">'
+                +(sv>0?'<span style="font-size:12px;font-weight:700;color:'+col+'">'+fms(sv)+'</span>':'<span style="color:var(--tx3)">—</span>')
+                +(pct!==null?' <span style="font-size:10px;color:'+col+'">'+pct+'%</span>':'')
+                +(sp>0?' <span style="font-size:10px;color:var(--tx3)">/ '+fms(sp)+'</span>':'')
+              +'</div>'
+              +'</div>';
+          });
+          if(!hasAny) return '<div style="color:var(--tx3);font-size:12px;padding:8px 0">Žádný SoD v roce 2026</div>';
+          return '<div style="display:flex;gap:12px;margin-bottom:6px;font-size:9px;color:var(--tx3)">'
+            +'<span><span style="display:inline-block;width:10px;height:6px;border-radius:1px;background:var(--rev);margin-right:3px;vertical-align:middle"></span>Skutečnost</span>'
+            +'<span><span style="display:inline-block;width:10px;height:6px;border-radius:1px;background:var(--brd);margin-right:3px;vertical-align:middle"></span>Plán</span>'
+            +'</div>'+rows;
+        })()}
 
         ${p.kp>0?`<hr>
           <div class="srow"><span style="color:var(--text2)">KP objem 2026</span><span style="font-weight:700">${fms(p.kp)}</span></div>
