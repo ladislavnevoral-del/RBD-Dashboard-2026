@@ -1318,17 +1318,24 @@ function buildContractWidget(p) {
     + (now.getDate()>=nastup.getDate()?0:-1);
   var totalDays = Math.floor((now-nastup)/(1000*60*60*24));
 
+  // Override: p.smlouva = 'ndu' znamená přeskočit na NDU bez ohledu na délku
+  var forcedPhase = (p.smlouva === 'ndu') ? 3 : -1;
+  // 4 fáze smluv: 1.rok (0-12m), 2.rok (12-24m), 3.rok (24-36m), NDU (36m+)
+  // Zkušební doba (0-4m) je součástí 1.roku — zobrazí se jako badge
   var phases = [
-    {key:'zk',  label:'Zkušební doba',   months:4,   col:'#e67e22', icon:'⏱'},
-    {key:'r1',  label:'Smlouva 1. rok',  months:12,  col:'#2980b9', icon:'①'},
-    {key:'r2',  label:'Opak. 2. rok',    months:12,  col:'#e67e22', icon:'②'},
-    {key:'r3',  label:'Opak. 3. rok',    months:12,  col:'#c0392b', icon:'③'},
-    {key:'ndu', label:'Na dobu neurčitou',months:999, col:'#1a9e72', icon:'∞'},
+    {key:'r1',  label:'Smlouva 1. rok',   months:12,  col:'#2980b9', icon:'①'},
+    {key:'r2',  label:'Opak. 2. rok',     months:12,  col:'#e67e22', icon:'②'},
+    {key:'r3',  label:'Opak. 3. rok',     months:12,  col:'#c0392b', icon:'③'},
+    {key:'ndu', label:'Na dobu neurčitou',months:999,  col:'#1a9e72', icon:'∞'},
   ];
-  var boundaries = [0,4,16,28,40];
+  var boundaries = [0,12,24,36,1200];
   var curPhaseIdx = phases.length-1;
-  for(var i=0;i<boundaries.length-1;i++) {
-    if(totalMonths < boundaries[i+1]) { curPhaseIdx=i; break; }
+  if(forcedPhase >= 0) {
+    curPhaseIdx = forcedPhase; // manuální override na NDU
+  } else {
+    for(var i=0;i<boundaries.length-1;i++) {
+      if(totalMonths < boundaries[i+1]) { curPhaseIdx=i; break; }
+    }
   }
   var phStart = boundaries[curPhaseIdx]||0;
   var phEnd   = boundaries[curPhaseIdx+1]||phStart+1;
@@ -1346,6 +1353,13 @@ function buildContractWidget(p) {
   var mths = Math.floor((totalDays%365)/30);
   var tenure = yrs>0 ? yrs+'r '+mths+'m' : mths+'m';
 
+  // Zkušební doba: první 4 měsíce (může být součástí 1. roku)
+  var inZkusebni = totalMonths < 4 && forcedPhase < 0;
+  var zkDaysLeft = 0;
+  if(inZkusebni) {
+    var zkEnd = new Date(nastup); zkEnd.setMonth(zkEnd.getMonth()+4);
+    zkDaysLeft = Math.max(0, Math.ceil((zkEnd-now)/(1000*60*60*24)));
+  }
   var daysLeft = '';
   if(curPhaseIdx < phases.length-1) {
     var phEndDate = new Date(nastup);
@@ -1391,6 +1405,11 @@ function buildContractWidget(p) {
     if(line2) svgParts.push('<text x="'+lx+'" y="38" text-anchor="middle" font-size="8" font-weight="'+(isCur?'700':'600')+'" fill="#fff" opacity="'+op+'">'+line2+'</text>');
   });
 
+  // Zkušební doba info badge
+  var zkBadge = inZkusebni
+    ? '<div style="display:inline-block;background:#e67e22;color:#fff;font-size:9px;font-weight:700;'
+      +'padding:2px 8px;border-radius:10px;margin-bottom:5px">⏱ Zkušební doba — ještě '+zkDaysLeft+' dní</div><br>'
+    : '';
   var progressBar = curPhaseIdx < phases.length-1
     ? '<div style="margin-top:5px;height:5px;background:var(--brd);border-radius:3px;overflow:hidden">'
         +'<div style="height:100%;width:'+phProgress+'%;background:'+cp.col+';border-radius:3px"></div></div>'
@@ -1400,12 +1419,30 @@ function buildContractWidget(p) {
         +'<span>'+phaseDate(phEnd,true)+'</span></div>'
     : '<div style="font-size:10px;color:#1a9e72;font-weight:600;margin-top:5px">✓ Platná od '+phaseDate(40,false)+'</div>';
 
+  // Edit button onclick — toggle forced NDU
+  var editBtn = '<button onclick="(function(){'
+    + 'var per=PEOPLE.find(function(x){return x.n===\'' + p.n.replace(/'/g,"\\'") + '\'});'
+    + 'if(!per)return;'
+    + 'if(per.smlouva===\'ndu\'){'
+    +   'if(confirm(\'Zrušit manuální NDU a vrátit výpočet dle délky poměru?\')) per.smlouva=undefined;'
+    + '}else{'
+    +   'if(confirm(\'Nastavit smlouvu na dobu neurčitou manuálně?\')) per.smlouva=\'ndu\';'
+    + '}'
+    + 'lsSave();'
+    + 'var cEl=document.getElementById(\'page-person\');'
+    + 'if(window._currentPerson)showPerson(window._currentPerson);'
+    + '})()" style="font-size:9px;padding:2px 7px;border:1px solid var(--brd);border-radius:4px;background:var(--bg);color:var(--tx3);cursor:pointer;margin-left:6px">'
+    + (p.smlouva==='ndu' ? '↩ Zrušit NDU override' : '✎ Nastavit NDU')
+    + '</button>';
+
   return '<div class="card mt12" style="padding:11px 14px">'
+    +zkBadge
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
     +'<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em">Pracovní smlouva</div>'
     +'<div style="display:flex;align-items:center;gap:8px">'
     +'<span style="font-size:10px;color:var(--tx3)">od <b>'+p.nastup+'</b></span>'
     +'<span style="font-size:10px;background:'+cp.col+';color:#fff;padding:2px 8px;border-radius:10px;font-weight:600">'+cp.label+' · '+tenure+'</span>'
+    +editBtn
     +'</div></div>'
     +'<svg viewBox="0 0 '+W+' '+arrH+'" style="width:100%;display:block">'+svgParts.join('')+'</svg>'
     +progressBar
