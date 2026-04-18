@@ -946,9 +946,25 @@ function renderOverview() {
   </div>
   ${(()=>{
     const _periods={q1:['l','u','b'],q2:['d','k','c'],h1:['l','u','b','d','k','c'],q3:['ce','sr','za'],q4:['ri','li','pr'],h2:['ce','sr','za','ri','li','pr'],rok:MK};
-    const _pnames={q1:'Q1',q2:'Q2',h1:'1. pol.',q3:'Q3',q4:'Q4',h2:'2. pol.',rok:'Celý rok'};
+    const _pnames={q1:'Q1',q2:'Q2',h1:'1. pol.',q3:'Q3',q4:'Q4',h2:'2. pol.',rok:'Celý rok',custom:'Vlastní'};
     const _per=window._ovPeriod||'q1';
-    const mks=_periods[_per];
+
+    // Vlastní období: přepočítat mks z data od–do
+    var mks;
+    if(_per==='custom' && window._ovFrom && window._ovTo) {
+      const fromDate = new Date(window._ovFrom);
+      const toDate   = new Date(window._ovTo);
+      const mMap = [{m:'l',d:1},{m:'u',d:2},{m:'b',d:3},{m:'d',d:4},{m:'k',d:5},{m:'c',d:6},{m:'ce',d:7},{m:'sr',d:8},{m:'za',d:9},{m:'ri',d:10},{m:'li',d:11},{m:'pr',d:12}];
+      mks = mMap.filter(x=>{
+        const mStart = new Date(2026, x.d-1, 1);
+        const mEnd   = new Date(2026, x.d, 0);
+        return mEnd >= fromDate && mStart <= toDate;
+      }).map(x=>x.m);
+      if(!mks.length) mks=['l'];
+    } else {
+      mks = _periods[_per] || _periods.q1;
+    }
+
     const wdPer=mks.reduce((s,m)=>s+(WD[m]||0),0);
     const sodP=p=>mks.reduce((s,m)=>s+(p.sod[m]||0),0);
     const aktP=p=>mks.reduce((s,m)=>s+aktM(p,m),0);
@@ -963,19 +979,36 @@ function renderOverview() {
     const revAktP=revP.reduce((s,p)=>s+aktP(p),0);
     const techAktP=techP.reduce((s,p)=>s+aktP(p),0);
     const bs=k=>'padding:3px 10px;font-size:10px;border:1px solid var(--brd);border-radius:4px;cursor:pointer;background:'+(k===_per?'var(--rev)':'var(--sur)')+';color:'+(k===_per?'#fff':'var(--tx2)')+';font-weight:'+(k===_per?'700':'400')+';transition:background .15s';
-    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">'
-      +Object.keys(_periods).map(k=>'<button style="'+bs(k)+'" onclick="window._ovPeriod=\''+k+'\';renderOverview()">'+_pnames[k]+'</button>').join('')
+
+    // Date picker pro vlastní období
+    const customPicker = _per==='custom'
+      ? '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
+        +'<label style="font-size:10px;color:var(--tx3)">Od:</label>'
+        +'<input type="date" id="ov_from" value="'+(window._ovFrom||'2026-01-01')+'" min="2026-01-01" max="2026-12-31"'
+        +' onchange="window._ovFrom=this.value;renderOverview()"'
+        +' style="font-size:11px;padding:2px 6px;border:1px solid var(--brd);border-radius:4px;background:var(--sur)">'
+        +'<label style="font-size:10px;color:var(--tx3)">Do:</label>'
+        +'<input type="date" id="ov_to" value="'+(window._ovTo||'2026-12-31')+'" min="2026-01-01" max="2026-12-31"'
+        +' onchange="window._ovTo=this.value;renderOverview()"'
+        +' style="font-size:11px;padding:2px 6px;border:1px solid var(--brd);border-radius:4px;background:var(--sur)">'
+        +'<span style="font-size:10px;color:var(--tx3);margin-left:4px">→ '+mks.length+' měsíc'+(mks.length===1?'':'ů')+': '+mks.map(m=>MNAMES[MK.indexOf(m)].slice(0,3)).join(', ')+'</span>'
+        +'</div>'
+      : '';
+
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">'
+      +[...Object.keys(_periods),'custom'].map(k=>'<button style="'+bs(k)+'" onclick="window._ovPeriod=\''+k+'\';'+(k==='custom'?'if(!window._ovFrom)window._ovFrom=\'2026-01-01\';if(!window._ovTo)window._ovTo=\'2026-12-31\';':'')+' renderOverview()">'+_pnames[k]+'</button>').join('')
       +'</div>'
+      +customPicker
       +'<div class="g4">'
       +'<div class="met '+(totPct>=100?'g':totPct>=60?'a':'r')+'">'
       +'<div class="mlbl">SoD 2026 celkem</div><div class="mval">'+fms(revSodP+techSodP)+'</div>'
-      +'<div class="msub">'+_pnames[_per]+' pln\u011bn\xed: '+totPct+'% z '+fms(revPlanP+techPlanP)+'</div></div>'
+      +'<div class="msub">'+(_per==='custom'&&window._ovFrom?window._ovFrom.slice(5)+' – '+(window._ovTo||'').slice(5):_pnames[_per])+' plnění: '+totPct+'% z '+fms(revPlanP+techPlanP)+'</div></div>'
       +'<div class="met v"><div class="mlbl">Revitalizace SoD</div><div class="mval">'+fms(revSodP)+'</div>'
-      +'<div class="msub">'+_pnames[_per]+': '+revPct+'% · '+revAktP+' \xfakon\u016f</div></div>'
+      +'<div class="msub">'+_pnames[_per]+': '+revPct+'% · '+revAktP+' úkonů</div></div>'
       +'<div class="met b"><div class="mlbl">Technologie SoD</div><div class="mval">'+fms(techSodP)+'</div>'
-      +'<div class="msub">'+_pnames[_per]+': '+techPct+'% · '+techAktP+' \xfakon\u016f</div></div>'
+      +'<div class="msub">'+_pnames[_per]+': '+techPct+'% · '+techAktP+' úkonů</div></div>'
       +'<div class="met"><div class="mlbl">Intenzita '+_pnames[_per]+'</div><div class="mval">'+ratio(revAktP+techAktP,wdPer)+'</div>'
-      +'<div class="msub">jedn./pd · '+wdPer+' pracovn\xedch dn\xed</div></div>'
+      +'<div class="msub">jedn./pd · '+wdPer+' pracovních dní</div></div>'
       +'</div>';
   })()}
   <div class="g2 mt20">
@@ -1317,137 +1350,139 @@ function buildContractWidget(p) {
   var totalMonths = (now.getFullYear()-nastup.getFullYear())*12 + (now.getMonth()-nastup.getMonth())
     + (now.getDate()>=nastup.getDate()?0:-1);
   var totalDays = Math.floor((now-nastup)/(1000*60*60*24));
-
-  // Override: p.smlouva = 'ndu' znamená přeskočit na NDU bez ohledu na délku
-  var forcedPhase = (p.smlouva === 'ndu') ? 3 : -1;
-  // 4 fáze smluv: 1.rok (0-12m), 2.rok (12-24m), 3.rok (24-36m), NDU (36m+)
-  // Zkušební doba (0-4m) je součástí 1.roku — zobrazí se jako badge
+  var forcedPhase = (p.smlouva==='ndu') ? 3 : -1;
   var phases = [
-    {key:'r1',  label:'Smlouva 1. rok',   months:12,  col:'#2980b9', icon:'①'},
-    {key:'r2',  label:'Opak. 2. rok',     months:12,  col:'#e67e22', icon:'②'},
-    {key:'r3',  label:'Opak. 3. rok',     months:12,  col:'#c0392b', icon:'③'},
-    {key:'ndu', label:'Na dobu neurčitou',months:999,  col:'#1a9e72', icon:'∞'},
+    {key:'r1',  short:'1. rok',   long:'Smlouva na 1 rok',      col:'#2980b9'},
+    {key:'r2',  short:'2. rok',   long:'Opakovaná 2. rok',      col:'#e67e22'},
+    {key:'r3',  short:'3. rok',   long:'Opakovaná 3. rok',      col:'#c0392b'},
+    {key:'ndu', short:'Neurčitá', long:'Na dobu neurčitou',      col:'#1a9e72'},
   ];
   var boundaries = [0,12,24,36,1200];
   var curPhaseIdx = phases.length-1;
-  if(forcedPhase >= 0) {
-    curPhaseIdx = forcedPhase; // manuální override na NDU
+  if(forcedPhase>=0) {
+    curPhaseIdx = forcedPhase;
   } else {
     for(var i=0;i<boundaries.length-1;i++) {
-      if(totalMonths < boundaries[i+1]) { curPhaseIdx=i; break; }
+      if(totalMonths<boundaries[i+1]){curPhaseIdx=i;break;}
     }
   }
   var phStart = boundaries[curPhaseIdx]||0;
   var phEnd   = boundaries[curPhaseIdx+1]||phStart+1;
-  var phProgress = Math.min(100, Math.round((totalMonths-phStart)/(phEnd-phStart)*100));
-  var cp = phases[curPhaseIdx];
-
-  function phaseDate(monthOffset, endDay) {
-    var d = new Date(nastup);
-    d.setMonth(d.getMonth()+monthOffset);
-    if(endDay) d.setDate(d.getDate()-1);
+  var phPct   = Math.min(100,Math.round((totalMonths-phStart)/(phEnd-phStart)*100));
+  var cp      = phases[curPhaseIdx];
+  var inZD    = totalMonths<4 && forcedPhase<0;
+  var zdPct   = Math.min(100,Math.round(totalMonths/4*100));
+  var yrs=Math.floor(totalDays/365), mths=Math.floor((totalDays%365)/30);
+  var tenure=yrs>0?yrs+'r '+mths+'m':mths+' m';
+  function phDate(mo,end){
+    var d=new Date(nastup); d.setMonth(d.getMonth()+mo);
+    if(end)d.setDate(d.getDate()-1);
     return d.toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'});
   }
 
-  var yrs = Math.floor(totalDays/365);
-  var mths = Math.floor((totalDays%365)/30);
-  var tenure = yrs>0 ? yrs+'r '+mths+'m' : mths+'m';
-
-  // Zkušební doba: první 4 měsíce (může být součástí 1. roku)
-  var inZkusebni = totalMonths < 4 && forcedPhase < 0;
-  var zkDaysLeft = 0;
-  if(inZkusebni) {
-    var zkEnd = new Date(nastup); zkEnd.setMonth(zkEnd.getMonth()+4);
-    zkDaysLeft = Math.max(0, Math.ceil((zkEnd-now)/(1000*60*60*24)));
-  }
-  var daysLeft = '';
-  if(curPhaseIdx < phases.length-1) {
-    var phEndDate = new Date(nastup);
-    phEndDate.setMonth(phEndDate.getMonth()+phEnd);
-    var dl = Math.ceil((phEndDate-now)/(1000*60*60*24));
-    daysLeft = dl>0 ? dl+' dní do konce' : 'Fáze ukončena';
-  }
-
-  // SVG arrow timeline
-  var W=500, arrH=46, notch=14;
-  var arrW = Math.floor(W/phases.length);
-  var svgParts = [];
-  phases.forEach(function(ph,i) {
-    var x = i*arrW;
-    var isLast = (i===phases.length-1);
-    var isCur = (i===curPhaseIdx);
-    var isDone = (i<curPhaseIdx);
-    var col = isDone ? '#9ca3af' : ph.col;
-    var op = isDone ? '0.6' : isCur ? '1' : '0.8';
-    // Arrow polygon
-    var x0=x, x1=x+arrW-notch, x2=x+arrW, xn=isLast?x0:x+notch;
-    var pts = isLast
-      ? x0+',0 '+x2+',0 '+x2+','+arrH+' '+x0+','+arrH+' '+xn+','+(arrH/2)
-      : x0+',0 '+x1+',0 '+x2+','+(arrH/2)+' '+x1+','+arrH+' '+x0+','+arrH+' '+xn+','+(arrH/2);
-    svgParts.push('<polygon points="'+pts+'" fill="'+col+'" opacity="'+op+'"'+(isCur?' stroke="#fff" stroke-width="2"':'')+'/>' );
-    // Progress fill on current
-    if(isCur && phProgress>0) {
-      var fw = Math.round(arrW*phProgress/100);
-      svgParts.push('<clipPath id="cpc"><rect x="'+x+'" y="0" width="'+fw+'" height="'+arrH+'"/></clipPath>');
+  // SVG — kompaktní šipky, výška 32px
+  var W=1300, H=44, notch=16;
+  var n=phases.length, aw=Math.floor(W/n);
+  var svgParts=[];
+  phases.forEach(function(ph,i){
+    var x=i*aw, isLast=(i===n-1), isCur=(i===curPhaseIdx), isDone=(i<curPhaseIdx);
+    var col=isDone?'#b0b8c1':ph.col;
+    var op=isDone?'0.55':isCur?'1':'0.75';
+    var x0=x, x1=x+aw-notch, x2=x+aw;
+    var pts=isLast
+      ? x0+',0 '+x2+',0 '+x2+','+H+' '+x0+','+H+' '+(x0?x0+notch:0)+','+H/2
+      : x0+',0 '+x1+',0 '+x2+','+H/2+' '+x1+','+H+' '+x0+','+H+' '+(i?x0+notch:x0)+','+H/2;
+    // Zkušební doba: první šipka má oranžový gradient overlay (první 4/12 šířky)
+    if(ph.key==='r1' && forcedPhase<0) {
+      // Renderovat šipku ve dvou částech: ZD (oranžová) + zbytek (modrá)
+      var zdW=Math.round(aw*4/12);
+      // Celá šipka v modré
+      svgParts.push('<polygon points="'+pts+'" fill="'+col+'" opacity="'+op+'"'+(isCur?' stroke="#fff" stroke-width="1.5"':'')+'/>');
+      // ZD overlay — pevná šíře zdW; oranžový pokud inZD, jinak průhledný (neviditelný)
+      // zdW = vždy stejné pro všechny (4/12 šipky)
+      if(inZD) {
+        // Aktivní ZD: plný oranžový pruh přes celou ZD sekci
+        svgParts.push('<clipPath id="czd"><rect x="0" y="0" width="'+zdW+'" height="'+H+'"/></clipPath>');
+        svgParts.push('<polygon points="'+pts+'" fill="#e67e22" opacity="0.9" clip-path="url(#czd)"/>');
+      }
+      // Pokud ZD skončila — nic, šipka zůstane čistě modrá
+    } else {
+      svgParts.push('<polygon points="'+pts+'" fill="'+col+'" opacity="'+op+'"'+(isCur?' stroke="#fff" stroke-width="1.5"':'')+'/>');
+    }
+    // Progress overlay na aktuální šipce
+    if(isCur && ph.key!=='r1' && phPct>0) {
+      var fw=Math.round(aw*phPct/100);
+      svgParts.push('<clipPath id="cpc"><rect x="'+x+'" y="0" width="'+fw+'" height="'+H+'"/></clipPath>');
       svgParts.push('<polygon points="'+pts+'" fill="rgba(255,255,255,.22)" clip-path="url(#cpc)"/>');
     }
-    // Badge circle
-    var cx = i===0 ? x+arrW*0.5 : x+notch*0.6+arrW*0.42;
-    svgParts.push('<circle cx="'+cx+'" cy="11" r="9" fill="'+(isCur?'#fff':col)+'" stroke="'+(isCur?col:'rgba(255,255,255,.5)')+'" stroke-width="1.5" opacity="'+op+'"/>');
-    svgParts.push('<text x="'+cx+'" y="15" text-anchor="middle" font-size="10" font-weight="700" fill="'+(isCur?col:'#fff')+'" opacity="'+op+'">'+ph.icon+'</text>');
-    // Labels (2 lines)
-    var words = ph.label.split(' ');
-    var line1='', line2='';
-    if(words.length<=2) { line1=words[0]; line2=words.slice(1).join(' '); }
-    else { line1=words.slice(0,2).join(' '); line2=words.slice(2).join(' '); }
-    var lx = i===0 ? x+arrW*0.5 : x+notch*0.6+arrW*0.42;
-    svgParts.push('<text x="'+lx+'" y="28" text-anchor="middle" font-size="8" font-weight="'+(isCur?'700':'600')+'" fill="#fff" opacity="'+op+'">'+line1+'</text>');
-    if(line2) svgParts.push('<text x="'+lx+'" y="38" text-anchor="middle" font-size="8" font-weight="'+(isCur?'700':'600')+'" fill="#fff" opacity="'+op+'">'+line2+'</text>');
+    // Text — krátký název + měsíce
+    var cx=i===0?x+aw*0.5-notch/3:x+notch/2+aw*0.43;
+    // Jeden řádek: název + rozsah
+    var rangeLabel=boundaries[i]+'\u2013'+(boundaries[i+1]<1000?boundaries[i+1]:'\u221e')+'m';
+    svgParts.push('<text x="'+cx+'" y="'+(H*0.64)+'" text-anchor="middle" font-size="22" font-weight="'+(isCur?'700':'600')+'" fill="#fff" opacity="'+op+'">'+ph.short+' '+rangeLabel+'</text>');
   });
+  // Legenda je jako HTML pod SVG (ne v SVG) — viz return níže
 
-  // Zkušební doba info badge
-  var zkBadge = inZkusebni
-    ? '<div style="display:inline-block;background:#e67e22;color:#fff;font-size:9px;font-weight:700;'
-      +'padding:2px 8px;border-radius:10px;margin-bottom:5px">⏱ Zkušební doba — ještě '+zkDaysLeft+' dní</div><br>'
+  // Progress bar + datum
+  // Dny do konce ZD
+  var zdEndDate = new Date(nastup); zdEndDate.setMonth(zdEndDate.getMonth()+4);
+  var zdDaysLeft = Math.max(0, Math.ceil((zdEndDate-now)/(1000*60*60*24)));
+  // Dny do konce aktuální fáze
+  var phEndDate2 = new Date(nastup); phEndDate2.setMonth(phEndDate2.getMonth()+phEnd);
+  var phDaysLeft = curPhaseIdx<phases.length-1 ? Math.max(0, Math.ceil((phEndDate2-now)/(1000*60*60*24))) : 0;
+
+  var zdBar = inZD
+    ? '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'
+      +'<span style="font-size:9px;color:#e67e22;font-weight:700;white-space:nowrap">⏱ ZD:</span>'
+      +'<div style="flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden">'
+      +'<div style="height:100%;width:'+zdPct+'%;background:#e67e22;border-radius:2px"></div></div>'
+      +'<span style="font-size:9px;color:#e67e22;font-weight:600">'+zdPct+'%</span>'
+      +'<span style="font-size:9px;color:var(--tx3);margin-left:2px">· ještě '+zdDaysLeft+' dní</span>'
+      +'<span style="font-size:9px;color:var(--tx3)">· do '+phDate(4,true)+'</span>'
+      +'</div>' : '';
+
+  var progBar = curPhaseIdx<phases.length-1
+    ? '<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'
+      +'<span style="font-size:9px;color:'+cp.col+';font-weight:700;white-space:nowrap">'+cp.short+':</span>'
+      +'<div style="flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden">'
+      +'<div style="height:100%;width:'+phPct+'%;background:'+cp.col+';border-radius:2px"></div></div>'
+      +'<span style="font-size:9px;color:'+cp.col+';font-weight:600">'+phPct+'%</span>'
+      +'<span style="font-size:9px;color:var(--tx3);margin-left:2px">· ještě '+phDaysLeft+' dní</span>'
+      +'<span style="font-size:9px;color:var(--tx3)">· '+phDate(phStart,false)+' – '+phDate(phEnd,true)+'</span>'
+      +'</div>' : '<div style="font-size:10px;color:#1a9e72;font-weight:600;margin-top:3px">✓ Platná smlouva na dobu neurčitou od '+phDate(36,false)+'</div>';
+
+  // Edit button
+  var editBtn='<button onclick="(function(){'
+    +'var per=PEOPLE.find(function(x){return x.n===\''+p.n.replace(/'/g,"\\'")+'\'});'
+    +'if(!per)return;'
+    +'if(per.smlouva===\'ndu\'){if(confirm(\'Zrušit NDU override?\'))per.smlouva=undefined;}'
+    +'else{if(confirm(\'Nastavit NDU manuálně?\'))per.smlouva=\'ndu\';}'
+    +'lsSave();if(window._currentPerson)showPerson(window._currentPerson);'
+    +'})()" style="font-size:9px;padding:1px 6px;border:1px solid var(--brd);border-radius:3px;background:var(--bg);color:var(--tx3);cursor:pointer">'
+    +(p.smlouva==='ndu'?'↩ Zrušit NDU':'✎ NDU')+'</button>';
+
+  // HTML legenda (pod SVG, viditelná jen pokud inZD)
+  var zdLegend = inZD
+    ? '<div style="display:flex;gap:10px;margin-top:3px;font-size:9px">'
+      +'<span><span style="display:inline-block;width:10px;height:8px;border-radius:2px;background:#e67e22;margin-right:3px;vertical-align:middle"></span>Zkušební doba</span>'
+      +'<span><span style="display:inline-block;width:10px;height:8px;border-radius:2px;background:#2980b9;margin-right:3px;vertical-align:middle"></span>Smlouva</span>'
+      +'</div>'
     : '';
-  var progressBar = curPhaseIdx < phases.length-1
-    ? '<div style="margin-top:5px;height:5px;background:var(--brd);border-radius:3px;overflow:hidden">'
-        +'<div style="height:100%;width:'+phProgress+'%;background:'+cp.col+';border-radius:3px"></div></div>'
-        +'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--tx3);margin-top:3px">'
-        +'<span>'+phaseDate(phStart,false)+'</span>'
-        +'<span style="font-weight:600;color:'+cp.col+'">'+phProgress+'% · '+daysLeft+'</span>'
-        +'<span>'+phaseDate(phEnd,true)+'</span></div>'
-    : '<div style="font-size:10px;color:#1a9e72;font-weight:600;margin-top:5px">✓ Platná od '+phaseDate(40,false)+'</div>';
 
-  // Edit button onclick — toggle forced NDU
-  var editBtn = '<button onclick="(function(){'
-    + 'var per=PEOPLE.find(function(x){return x.n===\'' + p.n.replace(/'/g,"\\'") + '\'});'
-    + 'if(!per)return;'
-    + 'if(per.smlouva===\'ndu\'){'
-    +   'if(confirm(\'Zrušit manuální NDU a vrátit výpočet dle délky poměru?\')) per.smlouva=undefined;'
-    + '}else{'
-    +   'if(confirm(\'Nastavit smlouvu na dobu neurčitou manuálně?\')) per.smlouva=\'ndu\';'
-    + '}'
-    + 'lsSave();'
-    + 'var cEl=document.getElementById(\'page-person\');'
-    + 'if(window._currentPerson)showPerson(window._currentPerson);'
-    + '})()" style="font-size:9px;padding:2px 7px;border:1px solid var(--brd);border-radius:4px;background:var(--bg);color:var(--tx3);cursor:pointer;margin-left:6px">'
-    + (p.smlouva==='ndu' ? '↩ Zrušit NDU override' : '✎ Nastavit NDU')
-    + '</button>';
-
-  return '<div class="card mt12" style="padding:11px 14px">'
-    +zkBadge
+  return '<div class="card mt12" style="padding:10px 14px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em">Pracovní smlouva</div>'
+    +'<div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em">Pracovní smlouva</div>'
     +'<div style="display:flex;align-items:center;gap:8px">'
-    +'<span style="font-size:10px;color:var(--tx3)">od <b>'+p.nastup+'</b></span>'
-    +'<span style="font-size:10px;background:'+cp.col+';color:#fff;padding:2px 8px;border-radius:10px;font-weight:600">'+cp.label+' · '+tenure+'</span>'
+    +'<span style="font-size:10px;color:var(--tx3)">od <b>'+p.nastup+'</b> · <b>'+tenure+'</b></span>'
+    +'<span style="font-size:10px;background:'+cp.col+';color:#fff;padding:1px 8px;border-radius:8px;font-weight:600">'+cp.long+'</span>'
+    +(inZD?'<span style="font-size:10px;background:#e67e22;color:#fff;padding:1px 8px;border-radius:8px;font-weight:600">⏱ Zkušební</span>':'')
     +editBtn
     +'</div></div>'
-    +'<svg viewBox="0 0 '+W+' '+arrH+'" style="width:100%;display:block">'+svgParts.join('')+'</svg>'
-    +progressBar
+    +'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;display:block;overflow:visible">'+svgParts.join('')+'</svg>'+zdLegend
+    +zdBar+progBar
     +'</div>';
 }
+
 
 function renderPerson(p,pg) {
   window._currentPerson = p.n;
@@ -1456,19 +1491,19 @@ function renderPerson(p,pg) {
   const rQ1=ratio(akt,WD_Q1);
   const pot=getPot(p),notes=getNotes(p);
   const recos=buildRecos(p);
-  const wdM={l:WD.l,u:WD.u,b:WD.b,d:WD_PD};
+  const wdM={l:WD.l,u:WD.u,b:WD.b,d:WD.d,k:WD.k,c:WD.c,ce:WD.ce,sr:WD.sr,za:WD.za,ri:WD.ri,li:WD.li,pr:WD.pr};
 
   // Intensity chart data
   const teamP=PEOPLE.filter(tp=>tp.vedouci===p.vedouci&&tp.n!==p.n&&!tp.nastup.includes('2026'));
   // Intensity: dot/line chart (me vs team avg)
-  const iMs=['l','u','b','d'],iLb=['Led','Únor','Bře','Dub'];
+  const iMs=MK, iLb=MNAMES.map(m=>m.slice(0,3));
   const myR2=iMs.map(m=>{const a=aktM(p,m),wd=wdM[m];return wd>0?parseFloat((a/wd).toFixed(2)):0;});
   const tmR2=iMs.map(m=>{const wd=wdM[m];return teamP.length&&wd>0?parseFloat((teamP.reduce((s,tp)=>s+aktM(tp,m),0)/teamP.length/wd).toFixed(2)):0;});
-  const iMx=Math.max(0.1,...myR2,...tmR2),W_I=280,H_I=48;
-  const myPts2=myR2.map((v,i)=>((i/3)*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
-  const tmPts2=tmR2.map((v,i)=>((i/3)*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
-  const myDots2=myR2.map((v,i)=>{const x=((i/3)*W_I).toFixed(1),y=(H_I-(v/iMx*H_I)).toFixed(1);const c=v>=1?'var(--grn)':v>=0.5?'var(--amb)':'var(--red)';return '<circle cx="'+x+'" cy="'+y+'" r="4" fill="'+c+'" stroke="#fff" stroke-width="1.5"/>'+(v>0?'<text x="'+x+'" y="'+(parseFloat(y)-7)+'" text-anchor="middle" font-size="8" fill="'+c+'" font-weight="700">'+v.toFixed(1)+'</text>':'');}).join('');
-  const iLbls=iLb.map((l,i)=>'<text x="'+((i/3)*W_I).toFixed(1)+'" y="'+(H_I+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+l+'</text>').join('');
+  const iMx=Math.max(0.1,...myR2,...tmR2),W_I=1200,H_I=48,N_I=iMs.length;
+  const myPts2=myR2.map((v,i)=>((i/(N_I-1))*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
+  const tmPts2=tmR2.map((v,i)=>((i/(N_I-1))*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
+  const myDots2=myR2.map((v,i)=>{const x=((i/(N_I-1))*W_I).toFixed(1),y=(H_I-(v/iMx*H_I)).toFixed(1);const c=v>=1?'var(--grn)':v>=0.5?'var(--amb)':'var(--red)';return '<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="'+c+'" stroke="#fff" stroke-width="1.5"/>'+(v>0?'<text x="'+x+'" y="'+(parseFloat(y)-6)+'" text-anchor="middle" font-size="7.5" fill="'+c+'" font-weight="700">'+v.toFixed(1)+'</text>':'');}).join('');
+  const iLbls=iLb.map((l,i)=>'<text x="'+((i/(N_I-1))*W_I).toFixed(1)+'" y="'+(H_I+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+l+'</text>').join('');
   const iBars='<svg viewBox="-4 -8 '+(W_I+8)+' '+(H_I+24)+'" style="width:100%;height:66px;overflow:visible"><polyline points="'+myPts2+'" fill="none" stroke="var(--rev)" stroke-width="2" stroke-linejoin="round"/><polyline points="'+tmPts2+'" fill="none" stroke="var(--brd2)" stroke-width="1.5" stroke-dasharray="4,2"/>'+myDots2+iLbls+'</svg>';
 
   // SoD bars
@@ -1511,10 +1546,23 @@ function renderPerson(p,pg) {
   })();
 
   // Activity table rows
-  const aktRows=['l','u','b','d'].map((m,i)=>{
+  // Přepínač období pro tabulku intenzity
+  const _iPer = window._intPer || 'rok';
+  const _iPeriods = {q1:['l','u','b'],q2:['d','k','c'],h1:['l','u','b','d','k','c'],q3:['ce','sr','za'],q4:['ri','li','pr'],h2:['ce','sr','za','ri','li','pr'],rok:MK,custom:'custom'};
+  const _iPnames = {q1:'Q1',q2:'Q2',h1:'1. pol.',q3:'Q3',q4:'Q4',h2:'2. pol.',rok:'Celý rok',custom:'Vlastní'};
+  var _iMks;
+  if(_iPer==='custom' && window._intFrom && window._intTo) {
+    const fd=new Date(window._intFrom), td=new Date(window._intTo);
+    const mm=[{m:'l',d:1},{m:'u',d:2},{m:'b',d:3},{m:'d',d:4},{m:'k',d:5},{m:'c',d:6},{m:'ce',d:7},{m:'sr',d:8},{m:'za',d:9},{m:'ri',d:10},{m:'li',d:11},{m:'pr',d:12}];
+    _iMks=mm.filter(x=>{const s=new Date(2026,x.d-1,1),e=new Date(2026,x.d,0);return e>=fd&&s<=td;}).map(x=>x.m);
+    if(!_iMks.length) _iMks=['l'];
+  } else {
+    _iMks = _iPeriods[_iPer]||MK;
+  }
+  const aktRows=_iMks.map((m,i)=>{
     const a=aktM(p,m),wd=wdM[m],r=ratio(a,wd);
     const popV=POPTAVKY[p.n]?.[m]||0;
-    return `<tr><td class="L">${MNAMES[i]}</td>
+    return `<tr><td class="L">${MNAMES[MK.indexOf(m)]}</td>
       <td style="color:var(--text3)">${wd}</td>
       <td>${p.om[m]||0}</td>
       <td style="color:var(--tech);font-weight:${popV>0?'600':'400'}">${popV||'—'}</td>
@@ -1523,11 +1571,11 @@ function renderPerson(p,pg) {
       <td class="${rcls(r)}" style="font-weight:700">${a>0?r:'—'}</td>
     </tr>`;
   }).join('');
-  const tO=['l','u','b'].reduce((s,m)=>s+(p.om[m]||0),0);
-  const tV=['l','u','b'].reduce((s,m)=>s+(p.vy[m]||0),0);
-  const tOp=['l','u','b'].reduce((s,m)=>s+(p.op[m]||0),0);
-  const tSc=['l','u','b'].reduce((s,m)=>s+(p.sc[m]||0),0);
-  const tJd=['l','u','b'].reduce((s,m)=>s+(p.jd?.[m]||0),0);
+  const tO=_iMks.reduce((s,m)=>s+(p.om[m]||0),0);
+  const tV=_iMks.reduce((s,m)=>s+(p.vy[m]||0),0);
+  const tOp=_iMks.reduce((s,m)=>s+(p.op[m]||0),0);
+  const tSc=_iMks.reduce((s,m)=>s+(p.sc[m]||0),0);
+  const tJd=_iMks.reduce((s,m)=>s+(p.jd?.[m]||0),0);
 
   // Team comparison
   const teamCmp=[...PEOPLE.filter(x=>x.vedouci===p.vedouci&&x.n!==p.n)].sort((a,b)=>sodAll(b)-sodAll(a)).map(x=>{
@@ -1604,10 +1652,23 @@ function renderPerson(p,pg) {
 
   ${buildContractWidget(p)}
 
-    <div class="g2 mt16">
-    <div>
-      <div class="card">
-        <div class="ctitle">Intenzita — jednaní / pracovní den</div>
+  <div class="card mt12" style="overflow-x:auto">
+        <div class="ctitle" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span>Intenzita — jednaní / pracovní den</span>
+          <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center" id="int-switcher-${p.n.replace(/[^a-zA-Z0-9]/g,'_')}">
+            ${(()=>{
+              const _bp=k=>'font-size:9px;padding:2px 7px;border:1px solid var(--brd);border-radius:3px;cursor:pointer;background:'+(k===_iPer?'var(--rev)':'var(--sur)')+';color:'+(k===_iPer?'#fff':'var(--tx2)');
+              const _pn2=encodeURIComponent(p.n);
+              let sw=['q1','q2','h1','q3','q4','h2','rok','custom'].map(k=>'<button style="'+_bp(k)+'" onclick="window._intPer=\''+k+'\';'+(k==='custom'?'if(!window._intFrom)window._intFrom=\'2026-01-01\';if(!window._intTo)window._intTo=\'2026-12-31\';':'')+'showPerson(decodeURIComponent(\''+_pn2+'\')):">'+{q1:'Q1',q2:'Q2','h1':'1.pol.',q3:'Q3',q4:'Q4',h2:'2.pol.',rok:'Rok',custom:'Vl.'}[k]+'</button>').join('');
+              if(_iPer==='custom') {
+                sw+='<input type="date" value="'+(window._intFrom||'2026-01-01')+'" min="2026-01-01" max="2026-12-31" onchange="window._intFrom=this.value;showPerson(decodeURIComponent(\''+_pn2+'\')" style="font-size:10px;padding:1px 4px;border:1px solid var(--brd);border-radius:3px;width:115px">';
+                sw+='<span style="font-size:10px;color:var(--tx3)">–</span>';
+                sw+='<input type="date" value="'+(window._intTo||'2026-12-31')+'" min="2026-01-01" max="2026-12-31" onchange="window._intTo=this.value;showPerson(decodeURIComponent(\''+_pn2+'\')" style="font-size:10px;padding:1px 4px;border:1px solid var(--brd);border-radius:3px;width:115px">';
+              }
+              return sw;
+            })()}
+          </div>
+        </div>
         <div style="display:flex;gap:4px;height:70px;align-items:flex-end;margin-bottom:6px">${iBars}</div>
         <div style="display:flex;gap:16px;font-size:10px;color:var(--text3);margin-bottom:12px">
           <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:1px;margin-right:3px;vertical-align:middle"></span>Obchodník</span>
@@ -1615,23 +1676,27 @@ function renderPerson(p,pg) {
           <span style="margin-left:auto">>=1,0 výborné · >=0,5 dobré</span>
         </div>
         <hr>
-        <div class="tw">
-          <table><thead><tr>
+        <div class="tw" style="overflow-x:auto">
+          <table style="min-width:800px;width:100%;table-layout:auto"><thead><tr>
             <th class="L">Měsíc</th><th>Prac.dny</th>
             <th>Oměření</th><th>Omě. z poptávky</th><th>Výbor V1</th><th>Opak. jednání</th><th>Ostatní jedn.</th><th>Schůze</th>
             <th>Celkem</th><th>Jed./pd</th>
           </tr></thead>
           <tbody>${aktRows}</tbody>
           <tfoot><tr>
-            <td class="L">Q1 celkem</td><td>${WD_Q1}</td>
+            <td class="L">${_iPnames[_iPer]}</td><td>${_iMks.reduce((s,m)=>s+(wdM[m]||0),0)}</td>
             <td>${tO}</td>
-            <td style="color:var(--tech);font-weight:600">${['l','u','b'].reduce((s,m)=>s+(POPTAVKY[p.n]?.[m]||0),0)||'—'}</td>
+            <td style="color:var(--tech);font-weight:600">${_iMks.reduce((s,m)=>s+(POPTAVKY[p.n]?.[m]||0),0)||'—'}</td>
             <td>${tV}</td><td>${tOp}</td><td>${tSc}</td><td>${tJd}</td>
-            <td style="font-weight:700">${akt}</td>
+            <td style="font-weight:700">${_iMks.reduce((s,m)=>s+aktM(p,m),0)||'—'}</td>
             <td class="${rcls(rQ1)}" style="font-weight:700">${akt>0?rQ1:'—'}</td>
           </tr></tfoot></table>
         </div>
       </div>
+
+    <div class="g2 mt16">
+    <div>
+      
 
       
 
@@ -1715,7 +1780,16 @@ function renderPerson(p,pg) {
         ${p.poz?`<div class="reco rb"><div class="reco-title">Výchozí poznámka</div><p>${p.poz}</p></div>`:''}
       </div>
 
+      
+
       <div class="card mt12">
+        <div class="ctitle">Srovnání v týmu — ${p.vedouci}</div>
+        ${teamCmp}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt12">
         <div class="ctitle">Pipeline potenciál</div>
         <div id="pip-summary-${p.n.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-bottom:10px">
           <span style="color:var(--tx3);font-size:11px">Žádný potenciál — přidej první akci níže</span>
@@ -1725,12 +1799,6 @@ function renderPerson(p,pg) {
           class="btn" style="margin-top:8px;width:100%;justify-content:center">
           + Přidat akci</button>
       </div>
-      <div class="card mt12">
-        <div class="ctitle">Srovnání v týmu — ${p.vedouci}</div>
-        ${teamCmp}
-      </div>
-    </div>
-  </div>
 
 
 
@@ -1764,15 +1832,30 @@ function renderPerson(p,pg) {
       </tr></thead>
       <tbody>
         ${[
-          {key:'om', label:'OM předaná přípr.', col:'var(--rev)'},
-          {key:'vy', label:'Výbor V1',          col:'var(--tech)'},
-          {key:'op', label:'Opak. jednání',     col:'var(--amb)'},
-          {key:'sc', label:'Ostatní jedn.',      col:'var(--tx2)'},
-          {key:'jd', label:'Schůze',             col:'var(--grn)'},
-        ].map(f=>'<tr><td class="L" style="font-weight:600;color:'+f.col+';white-space:nowrap">'+f.label+'</td>'
-          +MK.map((m,mi)=>'<td><input type="number" min="0" value="'+(p[f.key]?.[m]||0)+'" data-person="'+p.n.replace(/"/g,'&quot;')+'" data-field="'+f.key+'" data-month="'+m+'" oninput="saveActivity(this)" style="width:38px;padding:2px 4px;font-size:11px;border:1px solid var(--brd);border-radius:3px;text-align:right"></td>').join('')
-          +'<td style="font-weight:700;font-size:11px">'+MK.reduce((s,m)=>s+(p[f.key]?.[m]||0),0)+'</td></tr>'
-        ).join('')}
+          {key:'om',  label:'Oměření',               col:'var(--rev)'},
+          {key:'vy',  label:'Výbor V1',              col:'var(--tech)'},
+          {key:'op',  label:'Opak. jednání',          col:'var(--amb)'},
+          {key:'sc',  label:'Ostatní jedn.',           col:'var(--tx2)'},
+          {key:'jd',  label:'Schůze',                  col:'var(--grn)'},
+          {key:'__pop',label:'Omě. z poptávky',        col:'var(--tech)', readonly:true},
+          {key:'__poptot',label:'Poptávky celkem',     col:'var(--tech)', readonly:true},
+          {key:'__prv',label:'Prvotní jednání',        col:'var(--rev)'},
+        ].map(f=>{
+          const isRO2 = f.readonly || f.key==='__pop' || f.key==='__poptot';
+          const getV2 = (m) => {
+            if(f.key==='__pop'||f.key==='__poptot') return POPTAVKY[p.n]?.[m]||0;
+            if(f.key==='__prv') return p.__prv?.[m]||0;
+            return p[f.key]?.[m]||0;
+          };
+          const tot2 = MK.reduce((s,m)=>s+getV2(m),0);
+          return '<tr><td class="L" style="font-weight:600;color:'+f.col+';white-space:nowrap">'+f.label+(isRO2?' <span style="font-size:9px;opacity:.6">(auto)</span>':'')+'</td>'
+            +MK.map(m=>{
+              const v=getV2(m);
+              if(isRO2) return '<td style="text-align:center;color:'+f.col+';font-size:11px;padding:4px 2px">'+(v||'—')+'</td>';
+              return '<td><input type="number" min="0" value="'+v+'" data-person="'+p.n.replace(/"/g,'&quot;')+'" data-field="'+f.key+'" data-month="'+m+'" oninput="saveActivity(this)" style="width:38px;padding:2px 4px;font-size:11px;border:1px solid var(--brd);border-radius:3px;text-align:right"></td>';
+            }).join('')
+            +'<td style="font-weight:700;font-size:11px;text-align:center">'+(tot2||'—')+'</td></tr>';
+        }).join('')}
       </tbody>
     </table>
     </div>
@@ -3132,16 +3215,21 @@ function buildPersonStats(p) {
     + (om25tot>0 ? '<div style="font-size:11px;color:var(--tx3);margin-top:2px">' + om25tot + ' v 2025</div>' : '')
     + '</div>'
     + '</div>'
-    + '<div style="background:#f8f5f0;border:1px solid var(--brd);border-radius:10px;padding:14px 16px;margin-top:8px;display:flex;align-items:center;gap:14px">'
-    + '<div style="flex:1">'
-    + '<div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">OM na 1 podpis SoD</div>'
+    + '<div style="background:#f8f5f0;border:1px solid var(--brd);border-radius:10px;padding:12px 16px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">OM na 1 podpis SoD</div>'
     + '<div style="font-size:10px;color:var(--tx3)">'
     + (cnt26>0 ? 'z '+cnt26+' smluv 2026' : 'žádné SoD 2026')
     + (ratio25!=='—' ? ' · '+ratio25+' v 2025' : '')
-    + '</div>'
-    + '</div>'
-    + '<div style="font-size:42px;font-weight:800;color:'+rCol+';line-height:1;font-variant-numeric:tabular-nums">' + ratio26 + '</div>'
-    + '</div>';
+    + '</div></div>'
+    + '<div style="font-size:38px;font-weight:800;color:'+rCol+';line-height:1;font-variant-numeric:tabular-nums">' + ratio26 + '</div></div>'
+    + (()=>{
+        const sc26tot=MK.reduce((s,m)=>s+(p.sc[m]||0),0);
+        const uspPct=sc26tot>0?Math.round(cnt26/sc26tot*100):null;
+        const uspCol=uspPct===null?'var(--tx3)':uspPct>=30?'var(--green)':uspPct>=15?'var(--amber)':'var(--red)';
+        return '<div style="display:flex;align-items:center;gap:10px">'+'<div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">Úspěšnost schůzí → SoD</div>'+'<div style="font-size:10px;color:var(--tx3)">'+cnt26+' SoD z '+sc26tot+' schůzí 2026</div></div>'+'<div style="font-size:38px;font-weight:800;color:'+uspCol+';line-height:1;font-variant-numeric:tabular-nums">'+(uspPct!==null?uspPct+'%':'—')+'</div></div>';
+      })()
+    + '</div>';;
 }
 
 
