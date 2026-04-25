@@ -913,6 +913,7 @@ function renderOverview() {
     </div>
     <div>${planBlock()}</div>
   </div>
+  ${poptavkyBlock()}
   ${pipelineOverviewBlock()}
   ${kpSummaryBlock()}
   `;
@@ -1335,6 +1336,86 @@ function buildContractWidget(p) {
     +'</div>';
 }
 
+function poptavkyBlock() {
+  const MK_NAMES = MNAMES.map(m=>m.slice(0,3));
+  // Grouped by team
+  const groups = [
+    {label:'Revitalizace', col:'var(--rev)', people: PEOPLE.filter(p=>p.tym==='rev')},
+    {label:'Technologie',  col:'var(--tech)',people: PEOPLE.filter(p=>p.tym==='tech')}
+  ];
+
+  // Column totals
+  const totals = MK.map(m => PEOPLE.reduce((s,p)=>s+(POPTAVKY[p.n]?.[m]||0),0));
+  const grandTotal = totals.reduce((a,b)=>a+b,0);
+  const maxVal = Math.max(1, ...PEOPLE.map(p=>MK.reduce((s,m)=>s+(POPTAVKY[p.n]?.[m]||0),0)));
+
+  let h = '<div class="card mt16">';
+  h += '<div class="ctitle" style="margin-bottom:12px">Počet poptávek po obchodnících — 2026</div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+
+  // Header
+  h += '<thead><tr style="background:var(--brd);position:sticky;top:0">';
+  h += '<th style="text-align:left;padding:6px 8px;font-weight:600;min-width:130px;white-space:nowrap">Obchodník</th>';
+  MK.forEach((m,i) => {
+    h += '<th style="padding:6px 4px;text-align:center;font-weight:600;min-width:32px;color:var(--tx2)">'+MK_NAMES[i]+'</th>';
+  });
+  h += '<th style="padding:6px 8px;text-align:right;font-weight:700;min-width:50px;border-left:2px solid var(--brd2)">Celkem</th>';
+  h += '<th style="padding:6px 8px;text-align:right;min-width:80px;color:var(--tx3);font-weight:400">Průměr/měs.</th>';
+  h += '</tr></thead><tbody>';
+
+  groups.forEach(g => {
+    if(!g.people.length) return;
+    // Group separator
+    h += '<tr><td colspan="'+(MK.length+3)+'" style="padding:5px 8px;font-size:10px;font-weight:700;color:'+g.col+';background:var(--bg);border-top:2px solid var(--brd2)">'+g.label+'</td></tr>';
+    // Sort by total desc
+    const sorted = [...g.people].sort((a,b)=>{
+      const ta=MK.reduce((s,m)=>s+(POPTAVKY[a.n]?.[m]||0),0);
+      const tb=MK.reduce((s,m)=>s+(POPTAVKY[b.n]?.[m]||0),0);
+      return tb-ta;
+    });
+    sorted.forEach((p,pi) => {
+      const rowTotal = MK.reduce((s,m)=>s+(POPTAVKY[p.n]?.[m]||0),0);
+      const avg = (rowTotal/12).toFixed(1);
+      const barW = Math.round(rowTotal/maxVal*100);
+      const rowBg = pi%2===0?'':'background:rgba(0,0,0,.02)';
+      h += '<tr style="'+rowBg+';border-bottom:1px solid var(--brd)">';
+      h += '<td style="padding:4px 8px;white-space:nowrap;font-weight:500">'+p.n+'</td>';
+      MK.forEach(m => {
+        const v = POPTAVKY[p.n]?.[m]||0;
+        const intensity = v===0?0:Math.min(1,v/12);
+        const bg = v===0?'':'background:rgba('+( g.col==='var(--rev)'?'180,40,40':'21,75,133')+','+( intensity*0.25 + 0.05).toFixed(2)+')';
+        h += '<td style="padding:4px;text-align:center;font-size:11px;'+bg+'">'+(v||'—')+'</td>';
+      });
+      h += '<td style="padding:4px 8px;text-align:right;font-weight:700;border-left:2px solid var(--brd2)">'+rowTotal+'</td>';
+      h += '<td style="padding:4px 8px;text-align:right;color:var(--tx3)">'+avg+'</td>';
+      h += '</tr>';
+    });
+    // Group subtotal
+    const gTotal = g.people.reduce((s,p)=>s+MK.reduce((ss,m)=>ss+(POPTAVKY[p.n]?.[m]||0),0),0);
+    h += '<tr style="background:var(--brd);font-weight:700">';
+    h += '<td style="padding:4px 8px">Celkem '+g.label+'</td>';
+    MK.forEach(m => {
+      const v = g.people.reduce((s,p)=>s+(POPTAVKY[p.n]?.[m]||0),0);
+      h += '<td style="padding:4px;text-align:center">'+v+'</td>';
+    });
+    h += '<td style="padding:4px 8px;text-align:right;border-left:2px solid var(--brd2)">'+gTotal+'</td>';
+    h += '<td style="padding:4px 8px;text-align:right;color:var(--tx3)">'+(gTotal/12).toFixed(1)+'</td>';
+    h += '</tr>';
+  });
+
+  // Grand total row
+  h += '<tr style="background:var(--rev);color:#fff;font-weight:700">';
+  h += '<td style="padding:5px 8px">Divize celkem</td>';
+  totals.forEach(v => {
+    h += '<td style="padding:5px 4px;text-align:center">'+v+'</td>';
+  });
+  h += '<td style="padding:5px 8px;text-align:right;border-left:2px solid rgba(255,255,255,.3)">'+grandTotal+'</td>';
+  h += '<td style="padding:5px 8px;text-align:right;opacity:.85">'+(grandTotal/12).toFixed(1)+'</td>';
+  h += '</tr>';
+
+  h += '</tbody></table></div></div>';
+  return h;
+}
 
 function renderPerson(p,pg) {
   window._currentPerson = p.n;
@@ -1343,19 +1424,19 @@ function renderPerson(p,pg) {
   const rQ1=ratio(akt,WD_Q1);
   const pot=getPot(p),notes=getNotes(p);
   const recos=buildRecos(p);
-  const wdM={l:WD.l,u:WD.u,b:WD.b,d:WD_PD};
+  const wdM={l:WD.l,u:WD.u,b:WD.b,d:WD.d,k:WD.k,c:WD.c,ce:WD.ce,sr:WD.sr,za:WD.za,ri:WD.ri,li:WD.li,pr:WD.pr};
 
   // Intensity chart data
   const teamP=PEOPLE.filter(tp=>tp.vedouci===p.vedouci&&tp.n!==p.n&&!tp.nastup.includes('2026'));
   // Intensity: dot/line chart (me vs team avg)
-  const iMs=['l','u','b','d'],iLb=['Led','Únor','Bře','Dub'];
+  const iMs=MK, iLb=MNAMES.map(m=>m.slice(0,3));
   const myR2=iMs.map(m=>{const a=aktM(p,m),wd=wdM[m];return wd>0?parseFloat((a/wd).toFixed(2)):0;});
   const tmR2=iMs.map(m=>{const wd=wdM[m];return teamP.length&&wd>0?parseFloat((teamP.reduce((s,tp)=>s+aktM(tp,m),0)/teamP.length/wd).toFixed(2)):0;});
-  const iMx=Math.max(0.1,...myR2,...tmR2),W_I=280,H_I=48;
-  const myPts2=myR2.map((v,i)=>((i/3)*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
-  const tmPts2=tmR2.map((v,i)=>((i/3)*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
-  const myDots2=myR2.map((v,i)=>{const x=((i/3)*W_I).toFixed(1),y=(H_I-(v/iMx*H_I)).toFixed(1);const c=v>=1?'var(--grn)':v>=0.5?'var(--amb)':'var(--red)';return '<circle cx="'+x+'" cy="'+y+'" r="4" fill="'+c+'" stroke="#fff" stroke-width="1.5"/>'+(v>0?'<text x="'+x+'" y="'+(parseFloat(y)-7)+'" text-anchor="middle" font-size="8" fill="'+c+'" font-weight="700">'+v.toFixed(1)+'</text>':'');}).join('');
-  const iLbls=iLb.map((l,i)=>'<text x="'+((i/3)*W_I).toFixed(1)+'" y="'+(H_I+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+l+'</text>').join('');
+  const iMx=Math.max(0.1,...myR2,...tmR2),W_I=1200,H_I=48,N_I=iMs.length;
+  const myPts2=myR2.map((v,i)=>((i/(N_I-1))*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
+  const tmPts2=tmR2.map((v,i)=>((i/(N_I-1))*W_I).toFixed(1)+','+(H_I-(v/iMx*H_I)).toFixed(1)).join(' ');
+  const myDots2=myR2.map((v,i)=>{const x=((i/(N_I-1))*W_I).toFixed(1),y=(H_I-(v/iMx*H_I)).toFixed(1);const c=v>=1?'var(--grn)':v>=0.5?'var(--amb)':'var(--red)';return '<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="'+c+'" stroke="#fff" stroke-width="1.5"/>'+(v>0?'<text x="'+x+'" y="'+(parseFloat(y)-6)+'" text-anchor="middle" font-size="7.5" fill="'+c+'" font-weight="700">'+v.toFixed(1)+'</text>':'');}).join('');
+  const iLbls=iLb.map((l,i)=>'<text x="'+((i/(N_I-1))*W_I).toFixed(1)+'" y="'+(H_I+13)+'" text-anchor="middle" font-size="8" fill="var(--tx3)">'+l+'</text>').join('');
   const iBars='<svg viewBox="-4 -8 '+(W_I+8)+' '+(H_I+24)+'" style="width:100%;height:66px;overflow:visible"><polyline points="'+myPts2+'" fill="none" stroke="var(--rev)" stroke-width="2" stroke-linejoin="round"/><polyline points="'+tmPts2+'" fill="none" stroke="var(--brd2)" stroke-width="1.5" stroke-dasharray="4,2"/>'+myDots2+iLbls+'</svg>';
 
   // SoD bars
@@ -1398,20 +1479,36 @@ function renderPerson(p,pg) {
   })();
 
   // Activity table rows
-  const aktRows=['l','u','b','d'].map((m,i)=>{
+  // Přepínač období pro tabulku intenzity
+  const _iPer = window._intPer || 'rok';
+  const _iPeriods = {q1:['l','u','b'],q2:['d','k','c'],h1:['l','u','b','d','k','c'],q3:['ce','sr','za'],q4:['ri','li','pr'],h2:['ce','sr','za','ri','li','pr'],rok:MK,custom:'custom'};
+  const _iPnames = {q1:'Q1',q2:'Q2',h1:'1. pol.',q3:'Q3',q4:'Q4',h2:'2. pol.',rok:'Celý rok',custom:'Vlastní'};
+  var _iMks;
+  if(_iPer==='custom' && window._intFrom && window._intTo) {
+    const fd=new Date(window._intFrom), td=new Date(window._intTo);
+    const mm=[{m:'l',d:1},{m:'u',d:2},{m:'b',d:3},{m:'d',d:4},{m:'k',d:5},{m:'c',d:6},{m:'ce',d:7},{m:'sr',d:8},{m:'za',d:9},{m:'ri',d:10},{m:'li',d:11},{m:'pr',d:12}];
+    _iMks=mm.filter(x=>{const s=new Date(2026,x.d-1,1),e=new Date(2026,x.d,0);return e>=fd&&s<=td;}).map(x=>x.m);
+    if(!_iMks.length) _iMks=['l'];
+  } else {
+    _iMks = _iPeriods[_iPer]||MK;
+  }
+  const aktRows=_iMks.map((m,i)=>{
     const a=aktM(p,m),wd=wdM[m],r=ratio(a,wd);
-    return `<tr><td class="L">${MNAMES[i]}</td>
+    const popV=POPTAVKY[p.n]?.[m]||0;
+    return `<tr><td class="L">${MNAMES[MK.indexOf(m)]}</td>
       <td style="color:var(--text3)">${wd}</td>
-      <td>${p.om[m]||0}</td><td>${p.vy[m]||0}</td><td>${p.op[m]||0}</td><td>${p.sc[m]||0}</td><td>${p.jd?.[m]||0}</td>
+      <td>${p.om[m]||0}</td>
+      <td style="color:var(--tech);font-weight:${popV>0?'600':'400'}">${popV||'—'}</td>
+      <td>${p.vy[m]||0}</td><td>${p.op[m]||0}</td><td>${p.sc[m]||0}</td><td>${p.jd?.[m]||0}</td>
       <td style="font-weight:700;color:${a>=15?'var(--green)':a>=8?'var(--amber)':'var(--red)'}">${a}</td>
       <td class="${rcls(r)}" style="font-weight:700">${a>0?r:'—'}</td>
     </tr>`;
   }).join('');
-  const tO=['l','u','b'].reduce((s,m)=>s+(p.om[m]||0),0);
-  const tV=['l','u','b'].reduce((s,m)=>s+(p.vy[m]||0),0);
-  const tOp=['l','u','b'].reduce((s,m)=>s+(p.op[m]||0),0);
-  const tSc=['l','u','b'].reduce((s,m)=>s+(p.sc[m]||0),0);
-  const tJd=['l','u','b'].reduce((s,m)=>s+(p.jd?.[m]||0),0);
+  const tO=_iMks.reduce((s,m)=>s+(p.om[m]||0),0);
+  const tV=_iMks.reduce((s,m)=>s+(p.vy[m]||0),0);
+  const tOp=_iMks.reduce((s,m)=>s+(p.op[m]||0),0);
+  const tSc=_iMks.reduce((s,m)=>s+(p.sc[m]||0),0);
+  const tJd=_iMks.reduce((s,m)=>s+(p.jd?.[m]||0),0);
 
   // Team comparison
   const teamCmp=[...PEOPLE.filter(x=>x.vedouci===p.vedouci&&x.n!==p.n)].sort((a,b)=>sodAll(b)-sodAll(a)).map(x=>{
@@ -1459,6 +1556,8 @@ function renderPerson(p,pg) {
     <div style="display:flex;gap:7px">
       <button class="btn" onclick="exportOnePager(window._currentPerson)">&#9113; Tisk / PDF</button>
       <button class="btn" onclick="showQR(window._currentPerson)">&#11041; QR kód</button>
+      <button class="btn" onclick="genAkcniPlan(window._currentPerson)" style="background:#154b85;color:#fff;border-color:#154b85">&#128203; Akční plán</button>
+      <button class="btn" onclick="genVytykaci(window._currentPerson)" style="background:#8b1a1a;color:#fff;border-color:#8b1a1a">&#9888; Vytýkací dopis</button>
       <button class="btn" onclick="nav('plan')">&#8592; Zpět</button>
           <button class="btn" onclick="if(window._currentPerson&&confirm('Odebrat '+window._currentPerson+'?'))removePerson(window._currentPerson)" style="color:var(--red);border-color:var(--red)">&#10005; Odebrat</button>
     </div>
@@ -1484,10 +1583,25 @@ function renderPerson(p,pg) {
     </div>
   </div>
 
-  <div class="g2 mt16">
-    <div>
-      <div class="card">
-        <div class="ctitle">Intenzita — jednaní / pracovní den</div>
+  ${buildContractWidget(p)}
+
+  <div class="card mt12" style="overflow-x:auto">
+        <div class="ctitle" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span>Intenzita — jednaní / pracovní den</span>
+          <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center" id="int-switcher-${p.n.replace(/[^a-zA-Z0-9]/g,'_')}">
+            ${(()=>{
+              const _bp=k=>'font-size:9px;padding:2px 7px;border:1px solid var(--brd);border-radius:3px;cursor:pointer;background:'+(k===_iPer?'var(--rev)':'var(--sur)')+';color:'+(k===_iPer?'#fff':'var(--tx2)');
+              const _pn2=encodeURIComponent(p.n);
+              let sw=['q1','q2','h1','q3','q4','h2','rok','custom'].map(k=>'<button style="'+_bp(k)+'" onclick="window._intPer=\''+k+'\';'+(k==='custom'?'if(!window._intFrom)window._intFrom=\'2026-01-01\';if(!window._intTo)window._intTo=\'2026-12-31\';':'')+'showPerson(decodeURIComponent(\''+_pn2+'\')):">'+{q1:'Q1',q2:'Q2','h1':'1.pol.',q3:'Q3',q4:'Q4',h2:'2.pol.',rok:'Rok',custom:'Vl.'}[k]+'</button>').join('');
+              if(_iPer==='custom') {
+                sw+='<input type="date" value="'+(window._intFrom||'2026-01-01')+'" min="2026-01-01" max="2026-12-31" onchange="window._intFrom=this.value;showPerson(decodeURIComponent(\''+_pn2+'\')" style="font-size:10px;padding:1px 4px;border:1px solid var(--brd);border-radius:3px;width:115px">';
+                sw+='<span style="font-size:10px;color:var(--tx3)">–</span>';
+                sw+='<input type="date" value="'+(window._intTo||'2026-12-31')+'" min="2026-01-01" max="2026-12-31" onchange="window._intTo=this.value;showPerson(decodeURIComponent(\''+_pn2+'\')" style="font-size:10px;padding:1px 4px;border:1px solid var(--brd);border-radius:3px;width:115px">';
+              }
+              return sw;
+            })()}
+          </div>
+        </div>
         <div style="display:flex;gap:4px;height:70px;align-items:flex-end;margin-bottom:6px">${iBars}</div>
         <div style="display:flex;gap:16px;font-size:10px;color:var(--text3);margin-bottom:12px">
           <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:1px;margin-right:3px;vertical-align:middle"></span>Obchodník</span>
@@ -1495,21 +1609,27 @@ function renderPerson(p,pg) {
           <span style="margin-left:auto">>=1,0 výborné · >=0,5 dobré</span>
         </div>
         <hr>
-        <div class="tw">
-          <table><thead><tr>
+        <div class="tw" style="overflow-x:auto">
+          <table style="min-width:800px;width:100%;table-layout:auto"><thead><tr>
             <th class="L">Měsíc</th><th>Prac.dny</th>
-            <th>OM předaná přípr.</th><th>Výbor V1</th><th>Opak. jednání</th><th>Ostatní jedn.</th><th>Schůze</th>
+            <th>Oměření</th><th>Omě. z poptávky</th><th>Výbor V1</th><th>Opak. jednání</th><th>Ostatní jedn.</th><th>Schůze</th>
             <th>Celkem</th><th>Jed./pd</th>
           </tr></thead>
           <tbody>${aktRows}</tbody>
           <tfoot><tr>
-            <td class="L">Q1 celkem</td><td>${WD_Q1}</td>
-            <td>${tO}</td><td>${tV}</td><td>${tOp}</td><td>${tSc}</td><td>${tJd}</td>
-            <td style="font-weight:700">${akt}</td>
+            <td class="L">${_iPnames[_iPer]}</td><td>${_iMks.reduce((s,m)=>s+(wdM[m]||0),0)}</td>
+            <td>${tO}</td>
+            <td style="color:var(--tech);font-weight:600">${_iMks.reduce((s,m)=>s+(POPTAVKY[p.n]?.[m]||0),0)||'—'}</td>
+            <td>${tV}</td><td>${tOp}</td><td>${tSc}</td><td>${tJd}</td>
+            <td style="font-weight:700">${_iMks.reduce((s,m)=>s+aktM(p,m),0)||'—'}</td>
             <td class="${rcls(rQ1)}" style="font-weight:700">${akt>0?rQ1:'—'}</td>
           </tr></tfoot></table>
         </div>
       </div>
+
+    <div class="g2 mt16">
+    <div>
+      
 
       
 
@@ -1593,7 +1713,16 @@ function renderPerson(p,pg) {
         ${p.poz?`<div class="reco rb"><div class="reco-title">Výchozí poznámka</div><p>${p.poz}</p></div>`:''}
       </div>
 
+      
+
       <div class="card mt12">
+        <div class="ctitle">Srovnání v týmu — ${p.vedouci}</div>
+        ${teamCmp}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt12">
         <div class="ctitle">Pipeline potenciál</div>
         <div id="pip-summary-${p.n.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-bottom:10px">
           <span style="color:var(--tx3);font-size:11px">Žádný potenciál — přidej první akci níže</span>
@@ -1603,12 +1732,6 @@ function renderPerson(p,pg) {
           class="btn" style="margin-top:8px;width:100%;justify-content:center">
           + Přidat akci</button>
       </div>
-      <div class="card mt12">
-        <div class="ctitle">Srovnání v týmu — ${p.vedouci}</div>
-        ${teamCmp}
-      </div>
-    </div>
-  </div>
 
 
 
@@ -1642,15 +1765,30 @@ function renderPerson(p,pg) {
       </tr></thead>
       <tbody>
         ${[
-          {key:'om', label:'OM předaná přípr.', col:'var(--rev)'},
-          {key:'vy', label:'Výbor V1',          col:'var(--tech)'},
-          {key:'op', label:'Opak. jednání',     col:'var(--amb)'},
-          {key:'sc', label:'Ostatní jedn.',      col:'var(--tx2)'},
-          {key:'jd', label:'Schůze',             col:'var(--grn)'},
-        ].map(f=>'<tr><td class="L" style="font-weight:600;color:'+f.col+';white-space:nowrap">'+f.label+'</td>'
-          +MK.map((m,mi)=>'<td><input type="number" min="0" value="'+(p[f.key]?.[m]||0)+'" data-person="'+p.n.replace(/"/g,'&quot;')+'" data-field="'+f.key+'" data-month="'+m+'" oninput="saveActivity(this)" style="width:38px;padding:2px 4px;font-size:11px;border:1px solid var(--brd);border-radius:3px;text-align:right"></td>').join('')
-          +'<td style="font-weight:700;font-size:11px">'+MK.reduce((s,m)=>s+(p[f.key]?.[m]||0),0)+'</td></tr>'
-        ).join('')}
+          {key:'om',  label:'Oměření',               col:'var(--rev)'},
+          {key:'vy',  label:'Výbor V1',              col:'var(--tech)'},
+          {key:'op',  label:'Opak. jednání',          col:'var(--amb)'},
+          {key:'sc',  label:'Ostatní jedn.',           col:'var(--tx2)'},
+          {key:'jd',  label:'Schůze',                  col:'var(--grn)'},
+          {key:'__pop',label:'Omě. z poptávky',        col:'var(--tech)', readonly:true},
+          {key:'__poptot',label:'Poptávky celkem',     col:'var(--tech)', readonly:true},
+          {key:'__prv',label:'Prvotní jednání',        col:'var(--rev)'},
+        ].map(f=>{
+          const isRO2 = f.readonly || f.key==='__pop' || f.key==='__poptot';
+          const getV2 = (m) => {
+            if(f.key==='__pop'||f.key==='__poptot') return POPTAVKY[p.n]?.[m]||0;
+            if(f.key==='__prv') return p.__prv?.[m]||0;
+            return p[f.key]?.[m]||0;
+          };
+          const tot2 = MK.reduce((s,m)=>s+getV2(m),0);
+          return '<tr><td class="L" style="font-weight:600;color:'+f.col+';white-space:nowrap">'+f.label+(isRO2?' <span style="font-size:9px;opacity:.6">(auto)</span>':'')+'</td>'
+            +MK.map(m=>{
+              const v=getV2(m);
+              if(isRO2) return '<td style="text-align:center;color:'+f.col+';font-size:11px;padding:4px 2px">'+(v||'—')+'</td>';
+              return '<td><input type="number" min="0" value="'+v+'" data-person="'+p.n.replace(/"/g,'&quot;')+'" data-field="'+f.key+'" data-month="'+m+'" oninput="saveActivity(this)" style="width:38px;padding:2px 4px;font-size:11px;border:1px solid var(--brd);border-radius:3px;text-align:right"></td>';
+            }).join('')
+            +'<td style="font-weight:700;font-size:11px;text-align:center">'+(tot2||'—')+'</td></tr>';
+        }).join('')}
       </tbody>
     </table>
     </div>
@@ -1667,6 +1805,7 @@ function renderPerson(p,pg) {
 }
 
 // ── RECOS ──────────────────────────────────
+
 function buildRecos(p) {
   const recos=[],tot=sodAll(p),akt=aktQ1(p),tier=kpTier(p),next=kpNext(p),pot=getPot(p),r=parseFloat(ratio(akt,WD_Q1));
   if(p.nastup.includes('2026')&&tot===0){recos.push({t:'rb',title:'Nováček v rozvoji',text:`Nastoupil ${p.nastup} — cíl: první SoD do konce Q2 2026.`});return recos;}
@@ -2079,6 +2218,31 @@ function sodOfYear(p,m) { return YEAR===2025?(SOD2025[p.n]?.[m]||0):(p.sod[m]||0
 // { 'Jméno': [{adr:'...', objem:0, kval:1, termin:''}] }
 const PIPELINE = {};
 const PIPELINE_BUILTIN = {};
+const POPTAVKY = {
+  'Marek Novák': {l:5,u:6,b:8,d:11,k:8,c:2,ce:6,sr:3,za:7,ri:9,li:8,pr:9},
+  'Lukáš Apfelthaler': {l:4,u:4,b:4,d:3,k:5,c:7,ce:3,sr:2,za:6,ri:2,li:4,pr:4},
+  'Viktor Valentini': {l:5,u:4,b:7,d:7,k:8,c:3,ce:5,sr:0,za:0,ri:5,li:4,pr:6},
+  'Daniel Králík': {l:8,u:5,b:13,d:8,k:10,c:8,ce:7,sr:8,za:11,ri:12,li:11,pr:9},
+  'Ondřej Bambous': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Milan Herold': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Michal Sodomka': {l:8,u:6,b:8,d:8,k:12,c:6,ce:6,sr:7,za:6,ri:9,li:3,pr:3},
+  'Jan Kudrna': {l:3,u:7,b:10,d:8,k:8,c:6,ce:7,sr:5,za:7,ri:5,li:8,pr:6},
+  'Michal Smolík': {l:3,u:2,b:5,d:2,k:5,c:2,ce:1,sr:0,za:2,ri:5,li:3,pr:3},
+  'Lukáš Gabčo': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Rostislav Truhlář': {l:3,u:2,b:5,d:3,k:7,c:4,ce:8,sr:3,za:7,ri:2,li:4,pr:4},
+  'Josef Chadraba': {l:10,u:2,b:11,d:11,k:13,c:9,ce:5,sr:3,za:4,ri:9,li:7,pr:12},
+  'Radim Rzyman': {l:1,u:3,b:1,d:3,k:4,c:4,ce:4,sr:2,za:1,ri:4,li:4,pr:3},
+  'Jan Pavlík': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Leoš Štryncl': {l:8,u:11,b:15,d:11,k:6,c:10,ce:8,sr:4,za:13,ri:13,li:8,pr:10},
+  'Pavel Velín': {l:4,u:3,b:8,d:8,k:6,c:7,ce:5,sr:3,za:7,ri:9,li:5,pr:6},
+  'Jakub Zeman': {l:4,u:9,b:2,d:8,k:5,c:5,ce:8,sr:3,za:10,ri:5,li:6,pr:3},
+  'Václav Slavík': {l:4,u:8,b:9,d:11,k:3,c:14,ce:5,sr:10,za:5,ri:10,li:18,pr:4},
+  'Lukáš Hilpert': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Petr Militký': {l:9,u:13,b:10,d:10,k:5,c:4,ce:5,sr:6,za:9,ri:7,li:4,pr:4},
+  'Ondřej Lička': {l:1,u:6,b:1,d:6,k:7,c:8,ce:4,sr:5,za:5,ri:5,li:4,pr:7},
+  'Ondřej Kupský': {l:0,u:0,b:1,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+  'Jaroslav Esterka': {l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0},
+};
 // ── Iniciální pipeline data (z Portálu) ──
 if(!PIPELINE['Jan Hanzal']) PIPELINE['Jan Hanzal']=[{id:"p_Jan_Hanzal_2026-04-23",nazev:"Jindřichův Hradec",okres:"Jindřichův Hradec",objem:11225508,kval:4,termin:"2026-04-23",pozn:""}]; else PIPELINE['Jan Hanzal'].push(...[{id:"p_Jan_Hanzal_2026-04-23",nazev:"Jindřichův Hradec",okres:"Jindřichův Hradec",objem:11225508,kval:4,termin:"2026-04-23",pozn:""}]);
 if(!PIPELINE['Lukáš Hilpert']) PIPELINE['Lukáš Hilpert']=[{id:"p_Hilpert_1",nazev:"Domažlice",okres:"Domažlice",objem:12856439,kval:3,termin:"2026-04-26",pozn:""},{id:"p_Hilpert_2",nazev:"Domažlice",okres:"Domažlice",objem:14739489,kval:3,termin:"2026-04-26",pozn:""}]; else PIPELINE['Lukáš Hilpert'].push(...[{id:"p_Hilpert_1",nazev:"Domažlice",okres:"Domažlice",objem:12856439,kval:3,termin:"2026-04-26",pozn:""},{id:"p_Hilpert_2",nazev:"Domažlice",okres:"Domažlice",objem:14739489,kval:3,termin:"2026-04-26",pozn:""}]);
@@ -2876,56 +3040,42 @@ function applyPayload(d) {
   if(d.top_bsc && Array.isArray(d.top_bsc)) {
     d.top_bsc.forEach(t=>{
       const idx=TOP_BSC.findIndex(x=>x.n===t.n);
-      if(idx>=0){if(t.vedouci)TOP_BSC[idx].vedouci=t.vedouci;if(t.tym)TOP_BSC[idx].tym=t.tym;TOP_BSC[idx].faze_override=t.faze_override;if(t.aktivni!==undefined)TOP_BSC[idx].aktivni=t.aktivni;if(t.nastup)TOP_BSC[idx].nastup=t.nastup;TOP_BSC[idx].ukonceni=t.ukonceni;}
-      else TOP_BSC.push(t);
+      if(idx>=0){
+        if(t.vedouci) TOP_BSC[idx].vedouci=t.vedouci;
+        if(t.tym)     TOP_BSC[idx].tym=t.tym;
+        TOP_BSC[idx].faze_override=t.faze_override;
+        if(t.aktivni!==undefined) TOP_BSC[idx].aktivni=t.aktivni;
+        if(t.nastup)  TOP_BSC[idx].nastup=t.nastup;
+        TOP_BSC[idx].ukonceni=t.ukonceni;
+        if(t.zdroj)   TOP_BSC[idx].zdroj=t.zdroj;
+      }
+      // NEPŘIDÁVEJ neznámá jména — zabrání duplicitám ze starých záloh
     });
   }
   if(d.photos_delta) Object.assign(PHOTOS_USER, d.photos_delta);
   if(d.region_data_user) window.REGION_DATA_USER = Object.assign(window.REGION_DATA_USER||{}, d.region_data_user);
-  if(d.plans) d.plans.forEach(s => {
-    const pl = PLANS.find(x => x.id === s.id); if(pl) Object.assign(pl.plan, s.plan);
+  if(d.plans) d.plans.forEach(s=>{
+    const pl=PLANS.find(x=>x.id===s.id); if(pl) Object.assign(pl.plan,s.plan);
   });
   if(d.sod2025) Object.assign(SOD2025, d.sod2025);
   if(d.om2025)  Object.assign(OM2025,  d.om2025);
-  // Re-fill from records in case sod2025 was only partially saved
-  if(typeof fillSOD2025fromRecords === 'function') fillSOD2025fromRecords();
-  if(d.overrides) d.overrides.forEach(ov => {
-    const p = PEOPLE.find(x => x.n === ov.n); if(!p) return;
-    if(ov.posl)    p.posl = ov.posl;
-    if(ov.narozeni) p.narozeni = ov.narozeni;
-    if(ov.pd  !== undefined) p.pd  = ov.pd;
-    if(ov.kp  !== undefined) p.kp  = ov.kp;
-    if(ov.kpp !== undefined) p.kpp = ov.kpp;
-    if(ov.akcni_plan !== undefined) p.akcni_plan = ov.akcni_plan;
-    ['sod','om','vy','op','sc'].forEach(f => { if(ov[f]) Object.assign(p[f], ov[f]); });
-    if(ov.jd && p.jd) Object.assign(p.jd, ov.jd);
+  if(typeof fillSOD2025fromRecords==='function') fillSOD2025fromRecords();
+  if(d.overrides) d.overrides.forEach(ov=>{
+    const p=PEOPLE.find(x=>x.n===ov.n); if(!p) return;
+    if(ov.posl)    p.posl=ov.posl;
+    if(ov.narozeni) p.narozeni=ov.narozeni;
+    if(ov.pd!==undefined) p.pd=ov.pd;
+    if(ov.kp!==undefined) p.kp=ov.kp;
+    if(ov.kpp!==undefined) p.kpp=ov.kpp;
+    if(ov.akcni_plan!==undefined) p.akcni_plan=ov.akcni_plan;
+    ['sod','om','vy','op','sc'].forEach(f=>{if(ov[f]) Object.assign(p[f],ov[f]);});
+    if(ov.jd&&p.jd) Object.assign(p.jd,ov.jd);
   });
-  if(d.top_bsc && Array.isArray(d.top_bsc)) {
-    d.top_bsc.forEach(t => {
-      const idx = TOP_BSC.findIndex(x => x.n === t.n);
-      if(idx >= 0) {
-        if(t.vedouci) TOP_BSC[idx].vedouci = t.vedouci;
-        if(t.tym)     TOP_BSC[idx].tym      = t.tym;
-        TOP_BSC[idx].faze_override = t.faze_override;
-        if(t.aktivni !== undefined) TOP_BSC[idx].aktivni  = t.aktivni;
-        if(t.nastup)  TOP_BSC[idx].nastup   = t.nastup;
-        TOP_BSC[idx].ukonceni = t.ukonceni;
-      } else { TOP_BSC.push(t); }
-    });
-  }
-  if(d.photos_delta) Object.assign(PHOTOS_USER, d.photos_delta);
-  if(d.pipeline) {
-    Object.keys(d.pipeline).forEach(name=>{
-      const saved=d.pipeline[name]||[];
-      if(saved.length>0) PIPELINE[name]=saved.map(r=>({...r,objem:Number(r.objem)||0,kval:Number(r.kval)||1}));
-    });
-    Object.keys(PIPELINE_BUILTIN).forEach(k=>{if(!d.pipeline[k]||!d.pipeline[k].length) PIPELINE[k]=[...PIPELINE_BUILTIN[k]];});
-  }
-  if(d.sod_edits) Object.keys(d.sod_edits).forEach(name => {
-    const recs = getSodRecords(name);
-    (d.sod_edits[name]||[]).forEach(edit => {
-      const r = recs.find(x => x.datum === edit.datum && x.objem_sod === edit.objem_sod);
-      if(r) { if(edit.admin) r.admin=edit.admin; if(edit.manazer) r.manazer=edit.manazer; if(edit.pozn) r.pozn=edit.pozn; }
+  if(d.sod_edits) Object.keys(d.sod_edits).forEach(name=>{
+    const recs=getSodRecords(name);
+    (d.sod_edits[name]||[]).forEach(edit=>{
+      const r=recs.find(x=>x.datum===edit.datum&&x.objem_sod===edit.objem_sod);
+      if(r){if(edit.admin)r.admin=edit.admin;if(edit.manazer)r.manazer=edit.manazer;if(edit.pozn)r.pozn=edit.pozn;}
       else if(edit._user) recs.push(edit);
     });
   });
@@ -3103,16 +3253,21 @@ function buildPersonStats(p) {
     + (om25tot>0 ? '<div style="font-size:11px;color:var(--tx3);margin-top:2px">' + om25tot + ' v 2025</div>' : '')
     + '</div>'
     + '</div>'
-    + '<div style="background:#f8f5f0;border:1px solid var(--brd);border-radius:10px;padding:14px 16px;margin-top:8px;display:flex;align-items:center;gap:14px">'
-    + '<div style="flex:1">'
-    + '<div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">OM na 1 podpis SoD</div>'
+    + '<div style="background:#f8f5f0;border:1px solid var(--brd);border-radius:10px;padding:12px 16px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">OM na 1 podpis SoD</div>'
     + '<div style="font-size:10px;color:var(--tx3)">'
     + (cnt26>0 ? 'z '+cnt26+' smluv 2026' : 'žádné SoD 2026')
     + (ratio25!=='—' ? ' · '+ratio25+' v 2025' : '')
-    + '</div>'
-    + '</div>'
-    + '<div style="font-size:42px;font-weight:800;color:'+rCol+';line-height:1;font-variant-numeric:tabular-nums">' + ratio26 + '</div>'
-    + '</div>';
+    + '</div></div>'
+    + '<div style="font-size:38px;font-weight:800;color:'+rCol+';line-height:1;font-variant-numeric:tabular-nums">' + ratio26 + '</div></div>'
+    + (()=>{
+        const sc26tot=MK.reduce((s,m)=>s+(p.sc[m]||0),0);
+        const uspPct=sc26tot>0?Math.round(cnt26/sc26tot*100):null;
+        const uspCol=uspPct===null?'var(--tx3)':uspPct>=30?'var(--green)':uspPct>=15?'var(--amber)':'var(--red)';
+        return '<div style="display:flex;align-items:center;gap:10px">'+'<div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">Úspěšnost schůzí → SoD</div>'+'<div style="font-size:10px;color:var(--tx3)">'+cnt26+' SoD z '+sc26tot+' schůzí 2026</div></div>'+'<div style="font-size:38px;font-weight:800;color:'+uspCol+';line-height:1;font-variant-numeric:tabular-nums">'+(uspPct!==null?uspPct+'%':'—')+'</div></div>';
+      })()
+    + '</div>';;
 }
 
 
@@ -3275,10 +3430,10 @@ function renderNaplnenost() {
     const nastup=new Date(t.nastup); if(isNaN(nastup)) return 'ZD';
     const mes=Math.max(0,(now.getFullYear()-nastup.getFullYear())*12
       +(now.getMonth()-nastup.getMonth())+(now.getDate()>=nastup.getDate()?0:-1));
-    if(mes<4)  return 'ZD';
-    if(mes<16) return '1. rok';
-    if(mes<28) return '2. rok';
-    if(mes<40) return '3. rok';
+    if(mes<5)  return 'ZD';
+    if(mes<13) return '1. rok';
+    if(mes<25) return '2. rok';
+    if(mes<37) return '3. rok';
     return 'na dobu neurčitou';
   }
   function fazeColor(f) {
