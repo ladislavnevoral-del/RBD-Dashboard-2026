@@ -4195,7 +4195,21 @@ initSOD2025();
   SOD_RECORDS['Josef Chadraba2'] = [{datum:'2026-04-08',objem_sod:11805103,sleva_pct:0.0,sleva_kc:0.0,objem_kp:11805103,akce:'Bruntál',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'RBD'}];
   SOD_RECORDS['Lukáš Hilpert'] = [{datum:'2026-04-26',objem_sod:4770338,sleva_pct:0.0,sleva_kc:0.0,objem_kp:4770338,akce:'Domažlice',cislo:'',pozn:'',admin:'',manazer:'',rbd_rf:'TECH'}];
 fillSOD2025fromRecords();
-sbLoad().then(()=>{ fillSOD2025fromRecords(); fixPipelineObjem(); refreshPd(); buildSidebar(); renderOverview(); });
+sbLoad().then(()=>{
+  fillSOD2025fromRecords();
+  // Oprava: přepočítej sod 2026 z SOD_RECORDS (čistí chybné hodnoty z localStorage/UI)
+  const _mmap26={'01':'l','02':'u','03':'b','04':'d','05':'k','06':'c','07':'ce','08':'sr','09':'za','10':'ri','11':'li','12':'pr'};
+  PEOPLE.forEach(p => {
+    const fresh={l:0,u:0,b:0,d:0,k:0,c:0,ce:0,sr:0,za:0,ri:0,li:0,pr:0};
+    getSodRecords(p.n).forEach(r => {
+      if(!r.datum||!r.datum.startsWith('2026')) return;
+      const mk=_mmap26[r.datum.slice(5,7)]; if(!mk) return;
+      fresh[mk]=(fresh[mk]||0)+(r.objem_sod||0);
+    });
+    Object.assign(p.sod, fresh);
+  });
+  fixPipelineObjem(); refreshPd(); buildSidebar(); renderOverview();
+});
 fixPipelineObjem();
 fixPeopleKp();
 refreshPd();
